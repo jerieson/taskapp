@@ -1,0 +1,38 @@
+[project]
+name = "taskapp-backend"
+version = "0.1.0"
+requires-python = ">=3.15"
+dependencies = [
+    "fastapi>=0.162.4",
+    "uvicorn[standard]>=0.54.0",
+    "sqlalchemy[asyncio]>=2.1.8",
+    "asyncpg>=0.32.0",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "httpx>=0.28.1",
+    "ruff>=0.17.4",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "N", "S", "ASYNC", "SIM", "C4", "PT", "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

@@ -1,0 +1,93 @@
+# Taskapp
+
+AI-assisted productivity app for a small dev team: tasks, reusable personal processes,
+daily productivity logs, dashboards, and read-only team visibility for managers.
+
+- Project rules and architecture: [CLAUDE.md](CLAUDE.md)
+- Build plan: [PHASES.md](PHASES.md)
+
+## Stack
+
+- **Backend:** Python 3.15, FastAPI, SQLAlchemy 2 (async, asyncpg), Alembic, Pydantic v2, uv
+- **Frontend:** React 19, TypeScript (strict), Vite, Tailwind CSS v4, daisyUI 5
+- **Database:** PostgreSQL 18
+
+## Requirements
+
+Only **Docker** (with Compose v2) and **make**. All tooling (uv, ruff, pytest, npm, eslint,
+tsc) runs inside containers; nothing else needs to be installed on the host.
+
+## Setup
+
+```bash
+cp .env.example .env     # or let `make dev` do it on first run
+make dev                 # builds images and starts db, backend, frontend
+```
+
+Then open:
+
+| URL | What |
+|---|---|
+| http://localhost:5173 | Frontend (Vite dev server, hot reload) |
+| http://localhost:5173/api/health | Backend health check (through the Vite proxy) |
+| http://localhost:5173/api/docs | Interactive API docs |
+
+The browser only talks to the Vite dev server, which proxies `/api` to the backend container.
+Neither the backend nor Postgres is published on the host; use `make psql` for a database shell.
+
+Containers run as your host user (`HOST_UID`/`HOST_GID`, set automatically by the Makefile), so
+files created inside them (lockfiles, generated types) are owned by you.
+
+### Changing the database password
+
+Postgres reads `POSTGRES_PASSWORD` only when it first creates the `pgdata` volume. If you change
+it in `.env` later, `/api/health` returns `database_unavailable` (the db logs show
+`password authentication failed`). Update the password inside the running database to match:
+
+```bash
+docker compose exec db sh -c 'printf "%s\n" "ALTER USER :\"u\" WITH PASSWORD :'"'"'pw'"'"';" | psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v u="$POSTGRES_USER" -v pw="$POSTGRES_PASSWORD"'
+```
+
+Or, if the dev data is disposable, run `docker compose down -v` to delete the volume. It is
+recreated with the new password on the next `make dev`.
+
+## Make commands
+
+| Command | Description |
+|---|---|
+| `make dev` | Start the dev stack with hot reload (Ctrl+C to stop) |
+| `make down` | Stop the dev stack |
+| `make logs` | Follow logs of all services |
+| `make build` | Rebuild dev images |
+| `make test` | Run backend tests (pytest) |
+| `make lint` | ruff check + ruff format check, eslint, prettier check |
+| `make format` | Auto-fix and format backend and frontend code |
+| `make typecheck` | TypeScript type check (`tsc -b`) |
+| `make check` | lint + typecheck + test. Must pass before a phase is done |
+| `make migrate` | Apply Alembic migrations (available from Phase 1) |
+| `make seed` | Run the idempotent seed script (available from Phase 1) |
+| `make types` | Regenerate `frontend/src/api/schema.d.ts` from the FastAPI OpenAPI schema |
+| `make lock` | Re-lock backend deps after editing `backend/pyproject.toml` |
+| `make psql` | Open `psql` in the running db container |
+
+Run `make` with no target to list them.
+
+## Adding dependencies
+
+- **Backend:** add the package to `backend/pyproject.toml`, run `make lock`, then `make build`.
+- **Frontend:** add the package to `frontend/package.json`, update the lockfile with
+  `docker compose run --rm --no-deps frontend npm install`, then `make dev` (the
+  `--renew-anon-volumes` flag picks up the new `node_modules`).
+
+Ask before adding anything not listed in CLAUDE.md.
+
+## API conventions
+
+- All routes live under `/api`. The OpenAPI schema (`/api/openapi.json`) is the contract.
+- Every error has the shape
+  `{"error": {"code": "snake_case", "message": "...", "fields": {...}}}`;
+  `fields` appears only on validation errors (HTTP 422).
+- List endpoints take `limit` (default 50, max 200) and `offset` and return
+  `{"items": [...], "total": n, "limit": n, "offset": n}`.
+- Logs are JSON lines on stdout. Each request gets an `X-Request-ID` (returned in the response
+  header and included in every log line for that request).

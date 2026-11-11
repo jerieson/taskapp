@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+@plugin "daisyui" {
+  themes: false;
+}
+
+/*
+ * Brand palette: Cloud Burst #13294b + orange #ffa400. Every other color is derived
+ * from them (bases, accent and neutral share Cloud Burst's hue). Status colors are
+ * light tones that all take dark navy text.
+ */
+
+@plugin "daisyui/theme" {
+  name: 'brand-light';
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: #fcfdff;
+  --color-base-200: #f2f6fb;
+  --color-base-300: #e2e8f2;
+  --color-base-content: #1e2e47;
+
+  --color-primary: #13294b;
+  --color-primary-content: #ffffff;
+  --color-secondary: #ffa400;
+  --color-secondary-content: #13294b;
+  --color-accent: #b3ccf2;
+  --color-accent-content: #13294b;
+  --color-neutral: #596475;
+  --color-neutral-content: #ffffff;
+
+  --color-info: #61c7cc;
+  --color-info-content: #13294b;
+  --color-success: #65d3a7;
+  --color-success-content: #13294b;
+  --color-warning: #f6d653;
+  --color-warning-content: #13294b;
+  --color-error: #ea6a6a;
+  --color-error-content: #13294b;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: 'brand-dark';
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #13294b;
+  --color-base-200: #0e2443;
+  --color-base-300: #0a1d38;
+  --color-base-content: #e5ecf5;
+
+  --color-primary: #77b0e7;
+  --color-primary-content: #0b1a31;
+  --color-secondary: #ffa400;
+  --color-secondary-content: #0b1a31;
+  --color-accent: #c2d6f2;
+  --color-accent-content: #0b1a31;
+  --color-neutral: #081425;
+  --color-neutral-content: #dfe5ef;
+
+  --color-info: #68cdd3;
+  --color-info-content: #0b1a31;
+  --color-success: #6cd9ae;
+  --color-success-content: #0b1a31;
+  --color-warning: #f3db65;
+  --color-warning-content: #0b1a31;
+  --color-error: #f17776;
+  --color-error-content: #0b1a31;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}

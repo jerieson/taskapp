@@ -1,0 +1,49 @@
+# Development stack. Run with `make dev`.
+name: taskapp
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Postgres 18+ images keep data under /var/lib/postgresql/<major>/
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    env_file: .env
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT:-8000}
+      --reload --no-access-log
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      VITE_PROXY_TARGET: http://backend:${APP_PORT:-8000}
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    volumes:
+      - ./frontend:/app
+      # Keep the image's node_modules instead of the host folder.
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
