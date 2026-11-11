@@ -9,6 +9,8 @@ dependencies = [
     "asyncpg>=0.32.0",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
+    "alembic>=1.20.1",
+    "pwdlib[argon2]>=0.3.1",
 ]
 
 [dependency-groups]
@@ -30,9 +32,13 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S105", "S106"]  # asserts and dummy passwords/tokens
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+
+[tool.ruff.lint.isort]
+# The local alembic/ migrations folder would otherwise make ruff treat it as first-party.
+known-third-party = ["alembic"]

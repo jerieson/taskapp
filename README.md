@@ -22,6 +22,8 @@ tsc) runs inside containers; nothing else needs to be installed on the host.
 ```bash
 cp .env.example .env     # or let `make dev` do it on first run
 make dev                 # builds images and starts db, backend, frontend
+make migrate             # in a second terminal: create the database schema
+make seed                # create the admin (ADMIN_* in .env) and default dropdown values
 ```
 
 Then open:
@@ -64,13 +66,37 @@ recreated with the new password on the next `make dev`.
 | `make format` | Auto-fix and format backend and frontend code |
 | `make typecheck` | TypeScript type check (`tsc -b`) |
 | `make check` | lint + typecheck + test. Must pass before a phase is done |
-| `make migrate` | Apply Alembic migrations (available from Phase 1) |
-| `make seed` | Run the idempotent seed script (available from Phase 1) |
+| `make migrate` | Apply Alembic migrations (`alembic upgrade head`) |
+| `make migration m="..."` | Autogenerate a new migration from model changes |
+| `make seed` | Create the admin and default dropdown values (idempotent) |
 | `make types` | Regenerate `frontend/src/api/schema.d.ts` from the FastAPI OpenAPI schema |
 | `make lock` | Re-lock backend deps after editing `backend/pyproject.toml` |
 | `make psql` | Open `psql` in the running db container |
 
 Run `make` with no target to list them.
+
+## Database and migrations
+
+- Models live in `backend/app/models/`, one module per area. Every schema change goes through
+  an Alembic migration (`backend/alembic/versions/`); never edit one that has been applied.
+- After changing a model, run `make migration m="describe the change"`, then **review the
+  generated file**. Autogenerate does not reliably pick up CHECK constraints, partial indexes,
+  or server-side defaults; add those by hand. Then `make migrate`.
+- `make test` fails if the models and migrations disagree, and also checks that every
+  migration can be rolled back to an empty database and re-applied.
+- Role and status columns are `VARCHAR` + `CHECK` constraints rather than native Postgres
+  `ENUM` types, so adding a value is a constraint swap in a migration.
+- `make seed` is safe to re-run: the admin is created only if no user has `ADMIN_USERNAME` or
+  `ADMIN_EMAIL` (an existing password is never changed), and each dropdown table is filled
+  only while it is empty.
+
+## Tests
+
+`make test` runs pytest in the backend container against a separate database named after
+`POSTGRES_DB` with a `_test` suffix (for example `app_test`). It is dropped, recreated, and
+migrated at the start of every run, so the dev database is never touched. Each test runs inside
+a transaction that is rolled back afterwards. Factory helpers for common rows (users, teams,
+tasks, logs, dropdown values) are in `backend/tests/factories.py`.
 
 ## Adding dependencies
 

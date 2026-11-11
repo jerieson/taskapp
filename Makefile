@@ -11,7 +11,7 @@ FRONTEND := $(COMPOSE) run --rm --build --no-deps frontend
 
 .DEFAULT_GOAL := help
 .PHONY: help dev down logs build test lint lint-backend lint-frontend format typecheck \
-        check migrate seed types lock psql
+        check migrate migration seed types lock psql
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -54,6 +54,10 @@ check: lint typecheck test ## Lint + type check + tests (must pass before a phas
 
 migrate: .env ## Apply Alembic migrations
 	$(BACKEND) alembic upgrade head
+
+migration: .env ## Autogenerate a migration: make migration m="add foo to bar"
+	@test -n "$(m)" || { echo 'Usage: make migration m="describe the change"'; exit 1; }
+	$(BACKEND) alembic revision --autogenerate -m "$(m)"
 
 seed: .env ## Run the idempotent seed script
 	$(BACKEND) python -m app.scripts.seed

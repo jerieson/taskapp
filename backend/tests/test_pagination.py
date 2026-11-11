@@ -2,9 +2,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import Page, Pagination, PaginationParams, paginate
-from app.db.engine import get_engine, get_sessionmaker
 
 pytestmark = pytest.mark.anyio
 
@@ -47,13 +47,9 @@ async def test_out_of_range_params_rejected(
     assert field in resp.json()["error"]["fields"]
 
 
-async def test_paginate_against_database() -> None:
+async def test_paginate_against_database(db: AsyncSession) -> None:
     series = func.generate_series(1, 120).table_valued("value").render_derived()
     stmt = select(series.c.value).order_by(series.c.value)
-    try:
-        async with get_sessionmaker()() as session:
-            items, total = await paginate(session, stmt, PaginationParams(limit=5, offset=100))
-    finally:
-        await get_engine().dispose()
+    items, total = await paginate(db, stmt, PaginationParams(limit=5, offset=100))
     assert total == 120
     assert list(items) == [101, 102, 103, 104, 105]
