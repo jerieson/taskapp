@@ -112,8 +112,35 @@ Ask before adding anything not listed in CLAUDE.md.
 - All routes live under `/api`. The OpenAPI schema (`/api/openapi.json`) is the contract.
 - Every error has the shape
   `{"error": {"code": "snake_case", "message": "...", "fields": {...}}}`;
-  `fields` appears only on validation errors (HTTP 422).
+  `fields` appears only on validation errors: request validation (HTTP 422) and rule checks
+  tied to a form field, such as a taken username (409) or a wrong current password (400).
 - List endpoints take `limit` (default 50, max 200) and `offset` and return
   `{"items": [...], "total": n, "limit": n, "offset": n}`.
 - Logs are JSON lines on stdout. Each request gets an `X-Request-ID` (returned in the response
   header and included in every log line for that request).
+
+## Authentication
+
+- **Sessions** are stored server-side (`sessions` table, only the token hash). The token
+  travels in an httpOnly, SameSite=Lax `session` cookie; `Secure` is set when
+  `COOKIE_SECURE=true`. Sessions expire after `SESSION_TTL_HOURS`. A deactivated user's
+  sessions stop working immediately.
+- **CSRF (double-submit):** every non-GET request must send the readable `csrf_token` cookie
+  back in the `X-CSRF-Token` header. Before the first non-GET request without a session
+  (login, invite acceptance, password reset), call `GET /api/auth/csrf` to get the cookie.
+  Login replaces it with a token bound to the new session; logged-in requests must send
+  that one.
+- **Login rate limit:** 10 failed logins per client IP per 15 minutes (in memory, reset on
+  restart). The IP comes from `CF-Connecting-IP` only when `TRUST_PROXY_HEADERS=true`.
+- **Invites:** the admin creates one with `POST /api/admin/invites` and copies the
+  `invite_url` from the response. The link is shown only once because only a hash of the
+  token is stored. The invitee opens `{FRONTEND_URL}/invite/{token}` and either sets a
+  username and password or continues with Google
+  (`/api/auth/google/login?invite={token}`).
+- **Password resets:** the admin calls `POST /api/admin/users/{id}/password-reset` and sends
+  the returned `reset_url` manually. It can be used once, expires after `RESET_TTL_HOURS`,
+  and using it revokes all of the user's sessions.
+- **Google login** is off while `GOOGLE_CLIENT_ID` is empty. When enabled, it accepts only a
+  verified Google email that matches an active user (and links the Google account) or a
+  pending invite. The callback redirects to `/` on success or to `/login?error=<code>`.
+- **First admin:** `make seed` creates it from the `ADMIN_*` variables.

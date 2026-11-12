@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.core.errors import AppError
 from app.core.middleware import _loggable_path
+from tests.auth_helpers import fetch_csrf
 
 pytestmark = pytest.mark.anyio
 
@@ -46,6 +47,7 @@ async def test_method_not_allowed(client: AsyncClient) -> None:
 
 
 async def test_validation_error_lists_fields(client: AsyncClient) -> None:
+    await fetch_csrf(client)
     resp = await client.post("/api/_test/items", json={"title": "", "hours": 25})
     assert resp.status_code == 422
     body = resp.json()
@@ -55,6 +57,7 @@ async def test_validation_error_lists_fields(client: AsyncClient) -> None:
 
 
 async def test_validation_error_for_missing_body(client: AsyncClient) -> None:
+    await fetch_csrf(client)
     resp = await client.post("/api/_test/items")
     assert resp.status_code == 422
     assert "body" in resp.json()["error"]["fields"]

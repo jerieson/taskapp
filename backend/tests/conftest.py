@@ -6,12 +6,15 @@
 - Each test gets `db`, an AsyncSession inside a transaction that is rolled back at the
   end of the test. Code under test may commit: commits become savepoints.
 - `client` is an HTTP client for the app whose requests use that same session.
+  `new_client()` makes more of them (e.g. a second browser for session tests).
+- `settings_override(**changes)` changes app settings for one test.
 """
 
 import asyncio
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic import command
@@ -22,10 +25,16 @@ from sqlalchemy import URL, make_url, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.db.engine import get_engine, get_sessionmaker
 from app.db.session import get_session
 from app.main import create_app
+
+
+def settings_with(**changes: Any) -> Settings:
+    """Current settings with some values changed (validated, so str -> SecretStr)."""
+    return Settings.model_validate({**get_settings().model_dump(), **changes})
+
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 
@@ -112,3 +121,28 @@ async def client(app: FastAPI, db: AsyncSession) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_session] = _session
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture
+async def new_client(app: FastAPI, client: AsyncClient) -> AsyncIterator[Callable[[], AsyncClient]]:
+    """Factory for extra clients (separate cookie jars) sharing the test session."""
+    extra: list[AsyncClient] = []
+
+    def _new() -> AsyncClient:
+        c = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+        extra.append(c)
+        return c
+
+    yield _new
+    for c in extra:
+        await c.aclose()
+
+
+@pytest.fixture
+def settings_override(app: FastAPI) -> Callable[..., Settings]:
+    def _override(**changes: Any) -> Settings:
+        settings = settings_with(**changes)
+        app.dependency_overrides[get_settings] = lambda: settings
+        return settings
+
+    return _override
