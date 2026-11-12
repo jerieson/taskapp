@@ -18,7 +18,7 @@ Use current stable versions of everything. Check the latest version at install t
 - daisyUI 5 (requires Tailwind v4). Before writing UI code, read https://daisyui.com/llms.txt or https://daisyui.com/SKILL.md for current class names and theme syntax.
 - React Router
 - TanStack Query for server state
-- React Hook Form + Zod for forms
+- React Hook Form + Zod for forms (`@hookform/resolvers` connects them)
 - Recharts for charts
 - `openapi-typescript` to generate TS types from the FastAPI OpenAPI schema
 - ESLint + Prettier
@@ -156,7 +156,7 @@ Established in Phase 0 and used by every endpoint.
 
 ### Mobile responsiveness
 - Mobile-first. Every screen must work at 360px width with no horizontal page scroll.
-- Navigation: daisyUI drawer; permanent sidebar from `lg` up, slide-over drawer with a hamburger button below `lg`.
+- Navigation: daisyUI drawer; permanent sidebar from `lg` up (collapsible to an icon rail, choice saved in `localStorage`), slide-over drawer with a hamburger button below `lg`.
 - Tables: below `md`, render rows as stacked cards. Wide tables that cannot be stacked scroll inside their own `overflow-x-auto` container.
 - Forms: single column on mobile, two columns from `md` where it helps.
 - Modals: `modal-bottom sm:modal-middle`.
@@ -166,7 +166,7 @@ Established in Phase 0 and used by every endpoint.
 ### General
 - Empty, loading (daisyUI skeleton), and error states for every list and widget.
 - Toasts for success and error. Confirmation modal before destructive actions.
-- All form inputs have labels. Visible focus states.
+- All form inputs have labels. Visible focus states (fields: primary-colored border highlight, not daisyUI's offset outline ring).
 
 ### Screens
 
@@ -187,7 +187,7 @@ Established in Phase 0 and used by every endpoint.
 
 ### Theme
 
-Defined in `frontend/src/index.css`. Brand colors are final: Cloud Burst `#13294B` and orange `#FFA400`. All other colors are derived from them (no stock Tailwind palette colors; yellow is used only for warning); status colors are light tones with dark navy content. Verify the syntax against current daisyUI 5 docs before using it.
+Defined in `frontend/src/index.css`. Brand colors are final: Cloud Burst `#13294B` and orange `#FFA400`. All other colors are derived from them (dark mode uses a slate background, changed at the owner's request after Phase 3) (no stock Tailwind palette colors; yellow is used only for warning); status colors are light tones with dark navy content. Verify the syntax against current daisyUI 5 docs before using it.
 
 ```css
 @import "tailwindcss";
@@ -198,7 +198,8 @@ Defined in `frontend/src/index.css`. Brand colors are final: Cloud Burst `#13294
 /*
  * Brand palette: Cloud Burst #13294B + orange #FFA400. Every other color is derived
  * from them (bases, accent and neutral share Cloud Burst's hue). Status colors are
- * light tones that all take dark navy text.
+ * light tones that all take dark navy text. The dark theme uses a mid-dark slate (a
+ * desaturated Cloud Burst) rather than near-black navy.
  */
 
 @plugin "daisyui/theme" {
@@ -210,7 +211,7 @@ Defined in `frontend/src/index.css`. Brand colors are final: Cloud Burst `#13294
   --color-base-100: #FCFDFF;
   --color-base-200: #F2F6FB;
   --color-base-300: #E2E8F2;
-  --color-base-content: #1E2E47;
+  --color-base-content: #14223A;
 
   --color-primary: #13294B;
   --color-primary-content: #FFFFFF;
@@ -246,10 +247,10 @@ Defined in `frontend/src/index.css`. Brand colors are final: Cloud Burst `#13294
   prefersdark: true;
   color-scheme: dark;
 
-  --color-base-100: #13294B;
-  --color-base-200: #0E2443;
-  --color-base-300: #0A1D38;
-  --color-base-content: #E5ECF5;
+  --color-base-100: #1E232B;
+  --color-base-200: #191D24;
+  --color-base-300: #14181E;
+  --color-base-content: #E8ECF2;
 
   --color-primary: #77B0E7;
   --color-primary-content: #0B1A31;
@@ -257,8 +258,8 @@ Defined in `frontend/src/index.css`. Brand colors are final: Cloud Burst `#13294
   --color-secondary-content: #0B1A31;
   --color-accent: #C2D6F2;
   --color-accent-content: #0B1A31;
-  --color-neutral: #081425;
-  --color-neutral-content: #DFE5EF;
+  --color-neutral: #3A4452;
+  --color-neutral-content: #F1F4F8;
 
   --color-info: #68CDD3;
   --color-info-content: #0B1A31;

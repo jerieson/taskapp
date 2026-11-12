@@ -6,7 +6,8 @@
 /*
  * Brand palette: Cloud Burst #13294b + orange #ffa400. Every other color is derived
  * from them (bases, accent and neutral share Cloud Burst's hue). Status colors are
- * light tones that all take dark navy text.
+ * light tones that all take dark navy text. The dark theme uses a mid-dark slate (a
+ * desaturated Cloud Burst) rather than near-black navy.
  */
 
 @plugin "daisyui/theme" {
@@ -18,7 +19,7 @@
   --color-base-100: #fcfdff;
   --color-base-200: #f2f6fb;
   --color-base-300: #e2e8f2;
-  --color-base-content: #1e2e47;
+  --color-base-content: #14223a;
 
   --color-primary: #13294b;
   --color-primary-content: #ffffff;
@@ -54,10 +55,10 @@
   prefersdark: true;
   color-scheme: dark;
 
-  --color-base-100: #13294b;
-  --color-base-200: #0e2443;
-  --color-base-300: #0a1d38;
-  --color-base-content: #e5ecf5;
+  --color-base-100: #1e232b;
+  --color-base-200: #191d24;
+  --color-base-300: #14181e;
+  --color-base-content: #e8ecf2;
 
   --color-primary: #77b0e7;
   --color-primary-content: #0b1a31;
@@ -65,8 +66,8 @@
   --color-secondary-content: #0b1a31;
   --color-accent: #c2d6f2;
   --color-accent-content: #0b1a31;
-  --color-neutral: #081425;
-  --color-neutral-content: #dfe5ef;
+  --color-neutral: #3a4452;
+  --color-neutral-content: #f1f4f8;
 
   --color-info: #68cdd3;
   --color-info-content: #0b1a31;
@@ -85,4 +86,42 @@
   --border: 1px;
   --depth: 1;
   --noise: 0;
+}
+
+/*
+ * Touch targets: at least 44px on touch screens. Unlayered, so it wins over daisyUI's
+ * size classes (btn-sm included); square buttons grow in both directions.
+ */
+@media (pointer: coarse) {
+  .btn,
+  .input,
+  .select,
+  .menu :where(li > a, li > button, li > summary) {
+    min-height: 2.75rem;
+  }
+  .btn-square,
+  .btn-circle {
+    min-width: 2.75rem;
+  }
+}
+
+/*
+ * Field focus: highlight the border in the primary color instead of daisyUI's
+ * offset outline ring. Still a clearly visible focus state.
+ */
+.input,
+.select,
+.textarea {
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+:is(.input, .select, .textarea):is(:focus, :focus-within) {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+:is(.input-error, .select-error, .textarea-error):is(:focus, :focus-within) {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 1px var(--color-error);
 }

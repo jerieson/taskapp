@@ -9,7 +9,8 @@ daily productivity logs, dashboards, and read-only team visibility for managers.
 ## Stack
 
 - **Backend:** Python 3.15, FastAPI, SQLAlchemy 2 (async, asyncpg), Alembic, Pydantic v2, uv
-- **Frontend:** React 19, TypeScript (strict), Vite, Tailwind CSS v4, daisyUI 5
+- **Frontend:** React 19, TypeScript (strict), Vite, Tailwind CSS v4, daisyUI 5, React Router,
+  TanStack Query, React Hook Form + Zod
 - **Database:** PostgreSQL 18
 
 ## Requirements
@@ -144,3 +145,45 @@ Ask before adding anything not listed in CLAUDE.md.
   verified Google email that matches an active user (and links the Google account) or a
   pending invite. The callback redirects to `/` on success or to `/login?error=<code>`.
 - **First admin:** `make seed` creates it from the `ADMIN_*` variables.
+
+## Frontend
+
+```
+frontend/src/
+├── main.tsx          # providers, router, 401 handler
+├── index.css         # Tailwind + daisyUI + brand-light / brand-dark themes
+├── api/              # client.ts (fetch wrapper), auth.ts (query hooks), schema.d.ts (generated)
+├── components/       # shared UI: PageHeader, DataTable, Pagination, ConfirmModal, toasts, ...
+├── features/         # one folder per area (auth for now)
+├── layouts/          # AppLayout (drawer + navbar), AuthLayout (public pages)
+├── lib/              # theme store, form helpers
+└── routes/           # route config, RequireAuth / RequireRole guards, sidebar links
+```
+
+- **API client** (`src/api/client.ts`): same-origin `fetch` with cookies. Non-GET requests send
+  the `csrf_token` cookie in `X-CSRF-Token` (fetching it from `/api/auth/csrf` first if it is
+  missing). Failed requests throw `ApiError` with `status`, `code`, `message` and `fields` from
+  the standard error format. A 401 clears cached data and redirects to `/login?next=...`.
+- **Types:** request and response types come from `src/api/schema.d.ts` (`Schemas['MeOut']`
+  etc.). Run `make types` after any backend API change; never hand-write response types.
+- **Server state:** TanStack Query. `useCurrentUser()` returns the logged-in user or `null`.
+  4xx errors are not retried.
+- **Routes:** public pages are `/login`, `/invite/:token` and `/reset-password/:token`.
+  Everything else sits behind `RequireAuth`; `RequireRole` limits team and admin pages and
+  shows "not found" to other roles. This only hides UI: the backend enforces permissions.
+  Unbuilt pages use the shared `PlaceholderPage`.
+- **Theme:** the navbar toggle switches light/dark, and `/profile` also offers "System". The
+  choice is stored in `localStorage` (`taskapp-theme`). An inline script in `index.html`
+  sets `<html data-theme>` before first paint, so the page never flashes the wrong theme.
+  `useTheme()` re-renders on changes, including OS theme changes in System mode and changes
+  made in other tabs.
+- **Shared components:** `DataTable` shows a table from `md` up and stacked cards below it,
+  and handles loading, error and empty states. Form fields (`InputField`, `SelectField`,
+  `TextareaField`) accept React Hook Form's `register()` props, and `applyFieldErrors()`
+  copies API field errors onto the form. Use `useToast()` for success/error toasts and
+  `ConfirmModal` before destructive actions.
+- **Colors:** use daisyUI semantic classes only, and pair each background with its
+  `-content` color. Status colors are too light for text on base surfaces in the light theme,
+  which is why form errors show base-content text next to an error-colored icon.
+- **Touch targets:** on touch screens, buttons, inputs and menu items are at least 44px tall
+  (rule at the end of `index.css`).
