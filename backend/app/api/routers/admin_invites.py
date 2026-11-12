@@ -26,6 +26,14 @@ async def list_invites(params: Pagination, db: SessionDep) -> Page[InviteOut]:
     return await invite_service.list_invites(db, params)
 
 
+@router.post("/{invite_id}/link", response_model=InviteCreated)
+async def regenerate_invite_link(
+    invite_id: int, db: SessionDep, settings: SettingsDep
+) -> InviteCreated:
+    """New link for a pending invite (the previous link stops working)."""
+    return await invite_service.regenerate_link(db, invite_id, settings)
+
+
 @router.delete("/{invite_id}", status_code=204)
 async def delete_invite(invite_id: int, db: SessionDep) -> None:
     """Revoke an invite that has not been accepted."""

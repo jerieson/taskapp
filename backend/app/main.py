@@ -1,6 +1,14 @@
 from fastapi import Depends, FastAPI
 
-from app.api.routers import admin_invites, admin_users, auth, health, invites, password_resets
+from app.api.routers import (
+    admin_invites,
+    admin_teams,
+    admin_users,
+    auth,
+    health,
+    invites,
+    password_resets,
+)
 from app.core.config import get_settings
 from app.core.csrf import csrf_protect
 from app.core.errors import register_exception_handlers
@@ -35,7 +43,15 @@ def create_app() -> FastAPI:
 
     # Public: health, auth (login/csrf/google; me/logout/change-password need a
     # session), invites, password-resets. Everything else requires get_current_user.
-    for module in (health, auth, invites, password_resets, admin_invites, admin_users):
+    for module in (
+        health,
+        auth,
+        invites,
+        password_resets,
+        admin_teams,
+        admin_users,
+        admin_invites,
+    ):
         app.include_router(module.router, prefix="/api")
 
     return app

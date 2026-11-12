@@ -1,4 +1,6 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+
+import Modal from './Modal'
 
 interface ConfirmModalProps {
   open: boolean
@@ -23,33 +25,14 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  const titleId = useId()
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
-  }, [open])
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="modal modal-bottom sm:modal-middle"
-      aria-labelledby={titleId}
-      // Escape key or backdrop click.
-      onCancel={(event) => {
-        event.preventDefault()
-        if (!isPending) onCancel()
-      }}
-    >
-      <div className="modal-box">
-        <h2 id={titleId} className="text-lg font-bold">
-          {title}
-        </h2>
-        {children && <div className="py-4">{children}</div>}
-        <div className="modal-action">
+    <Modal
+      open={open}
+      title={title}
+      locked={isPending}
+      onClose={onCancel}
+      actions={
+        <>
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={isPending}>
             Cancel
           </button>
@@ -62,13 +45,10 @@ export default function ConfirmModal({
             {isPending && <span className="loading loading-spinner loading-sm" />}
             {confirmLabel}
           </button>
-        </div>
-      </div>
-      <div className="modal-backdrop">
-        <button type="button" onClick={onCancel} disabled={isPending} aria-label="Close">
-          close
-        </button>
-      </div>
-    </dialog>
+        </>
+      }
+    >
+      {children}
+    </Modal>
   )
 }

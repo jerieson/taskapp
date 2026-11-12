@@ -13,13 +13,8 @@ import {
   newPasswordSchema,
   PASSWORDS_DIFFER,
 } from '../../lib/forms'
+import { ROLE_LABEL } from '../../lib/labels'
 import { useTheme, type ThemeMode } from '../../lib/theme'
-
-const ROLE_LABEL: Record<CurrentUser['role'], string> = {
-  admin: 'Admin',
-  manager: 'Manager',
-  dev: 'Developer',
-}
 
 const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'system', label: 'System' },

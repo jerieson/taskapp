@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 
 import PlaceholderPage from '../components/PlaceholderPage'
+import AdminPage from '../features/admin/AdminPage'
 import InvitePage from '../features/auth/InvitePage'
 import LoginPage from '../features/auth/LoginPage'
 import ProfilePage from '../features/auth/ProfilePage'
@@ -63,7 +64,7 @@ export const router = createBrowserRouter([
                 path: 'admin',
                 element: (
                   <RequireRole roles={ADMIN_ROLES}>
-                    <PlaceholderPage title="Admin" />
+                    <AdminPage />
                   </RequireRole>
                 ),
               },

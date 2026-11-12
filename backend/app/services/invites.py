@@ -52,6 +52,15 @@ def _to_out(invite: Invite) -> InviteOut:
     )
 
 
+def _created(invite: Invite, token: str, settings: Settings) -> InviteCreated:
+    return InviteCreated.model_validate(
+        {
+            **_to_out(invite).model_dump(),
+            "invite_url": f"{settings.frontend_url}/invite/{token}",
+        }
+    )
+
+
 def _is_pending() -> ColumnElement[bool]:
     return and_(Invite.accepted_at.is_(None), Invite.expires_at > utcnow())
 
@@ -116,18 +125,30 @@ async def create_invite(
     await db.commit()
     await db.refresh(invite)
     logger.info("invite_created", extra={"fields": {"invite_id": invite.id}})
-    return InviteCreated.model_validate(
-        {
-            **_to_out(invite).model_dump(),
-            "invite_url": f"{settings.frontend_url}/invite/{token}",
-        }
-    )
+    return _created(invite, token, settings)
 
 
 async def list_invites(db: AsyncSession, params: PaginationParams) -> Page[InviteOut]:
     stmt = select(Invite).order_by(Invite.created_at.desc(), Invite.id.desc())
     items, total = await paginate(db, stmt, params)
     return Page[InviteOut].build([_to_out(i) for i in items], total, params)
+
+
+async def regenerate_link(db: AsyncSession, invite_id: int, settings: Settings) -> InviteCreated:
+    """Issue a new link for a pending invite. Only the token hash is stored, so an old
+    link cannot be shown again; the previous link stops working. Expiry is unchanged.
+    """
+    invite = await db.scalar(select(Invite).where(Invite.id == invite_id).with_for_update())
+    if invite is None:
+        raise AppError(404, "not_found", "Invite not found")
+    if invite_status(invite) != InviteStatus.PENDING:
+        raise AppError(409, "invite_not_pending", "Only pending invites have a usable link")
+    token = generate_token()
+    invite.token_hash = hash_token(token)
+    await db.commit()
+    await db.refresh(invite)
+    logger.info("invite_link_regenerated", extra={"fields": {"invite_id": invite.id}})
+    return _created(invite, token, settings)
 
 
 async def delete_invite(db: AsyncSession, invite_id: int) -> None:
