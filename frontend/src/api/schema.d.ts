@@ -1213,6 +1213,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/log-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log Draft
+         * @description Draft a prod log from free text. The text is sent to the configured AI provider.
+         *
+         *     Errors: 503 `ai_disabled`, 429 `ai_daily_limit_exceeded`, 502 `ai_invalid_output`
+         *     or `ai_provider_error`.
+         */
+        post: operations["log_draft_api_ai_log_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/categories": {
         parameters: {
             query?: never;
@@ -1854,6 +1877,34 @@ export interface components {
          * @enum {string}
          */
         InviteStatus: "pending" | "accepted" | "expired";
+        /**
+         * LogDraftOut
+         * @description A prod log draft for the user to review. Every ID is active and usable by the
+         *     caller; anything the AI could not determine is null and listed in `missing_fields`.
+         */
+        LogDraftOut: {
+            /** Title */
+            title: string | null;
+            /** Description */
+            description: string | null;
+            /** Log Date */
+            log_date: string | null;
+            /** Hours Spent */
+            hours_spent: number | null;
+            /** Task Id */
+            task_id: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Category Id */
+            category_id: number | null;
+            /** Missing Fields */
+            missing_fields: ("title" | "log_date" | "hours_spent" | "category_id")[];
+        };
+        /** LogDraftRequest */
+        LogDraftRequest: {
+            /** Text */
+            text: string;
+        };
         /** LoginIn */
         LoginIn: {
             /** Username */
@@ -6156,6 +6207,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskCounts"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    log_draft_api_ai_log_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogDraftOut"];
                 };
             };
             /** @description Client error */

@@ -128,6 +128,12 @@ start unless that provider has an adapter and `LLM_MODEL` and `LLM_API_KEY` are 
 **Privacy:** using an AI feature sends the related log and task text to the configured LLM
 provider.
 
+Features:
+
+- **Log entry from text** (`POST /api/ai/log-draft`, on `/logs` and `/today`): sends the text
+  plus your open task titles and the active category and project names. The draft only
+  pre-fills the log form; nothing is saved until you click "Add log".
+
 | Variable | Meaning |
 |---|---|
 | `LLM_PROVIDER` | `openai`: OpenAI or any OpenAI-compatible endpoint. Empty disables AI. |

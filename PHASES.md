@@ -23,12 +23,19 @@ Every phase ends with the same closing steps, so they are not repeated in each p
 | 11 | Team and admin dashboards |
 | 12 | AI provider layer |
 | 13 | AI natural-language log entry |
-| 14 | AI daily plan |
-| 15 | AI team summary |
-| 16 | Hardening |
-| 17 | Deployment to the staging VM |
+| 14 | Linked dropdowns + import of the sheet's Data tab |
+| 15 | Prod log fields: activity, work set-up, O&M project, planned/actual hours |
+| 16 | Weekly planning: Friday deadline, planned/unplanned, lock, /today, copy plan, status (daily plan removed) |
+| 17 | Export prod logs to CSV (sheet format) |
+| 18 | Support dictionary (replaces personal processes) |
+| 19 | AI multi-row log entry and planning (replaces AI daily plan) |
+| 20 | AI team summary |
+| 21 | Hardening |
+| 22 | Deployment to the staging VM |
 
-Phase 17 depends only on Phases 0 to 3. It can be run early to confirm that login, cookies, and Google OAuth work behind cloudflared, then re-run for later releases.
+Phases 14 to 19 were added after Phase 13 to match the team's real productivity-log spreadsheet and support dictionary; they rework parts of Phases 7 to 10 and 13.
+
+Phase 22 depends only on Phases 0 to 3. It can be run early to confirm that login, cookies, and Google OAuth work behind cloudflared, then re-run for later releases.
 
 ---
 
@@ -389,31 +396,149 @@ Acceptance:
 
 ---
 
-## Phase 14 — AI Daily Plan
+## Phase 14 — Linked Dropdowns and Data Tab Import
 
 ```
-Do Phase 14 only.
+Do Phase 14 only. Read "Data Model" (categories, projects, project_categories, activity_groups, activities, activity_group_members, om_projects, work_setups) and the "Data tab import" rule in CLAUDE.md first. Sample file: the owner's "Productivity Log - Data" CSV (ask for the path).
+
+Before coding: print the mapping you derive from the sample CSV (category -> projects, project -> activity group, group -> activities, O&M projects) and ask the owner to confirm it.
 
 Backend:
-1. POST /api/ai/daily-plan-draft { date } -> proposed items (not saved).
-2. Post-process: drop task IDs not owned or not open, remove duplicates, trim total suggested hours to WORKDAY_HOURS.
-3. Saving uses the replace-all endpoint from Phase 8 with ai_generated = true and ai_reason per item.
+1. Migration: the tables above; categories.requires_om_project; projects.activity_group_id. Seed work set-ups Remote (default), On-Site, Out-of-Office.
+2. Admin CRUD for activity groups, activities, O&M projects, work set-ups (same endpoints and rules as categories: activate/deactivate, reorder, single default for work set-ups). Activity group membership: PUT /api/activity-groups/{id}/activities { activity_ids } (ordered). Project: category links and activity group on create/update.
+3. Read endpoints for the log form: GET /api/log-options returns active categories, projects (with category_ids and activity_group_id), activity groups with their activity ids, activities, O&M projects, work set-ups, in one response.
+4. POST /api/admin/import/data-tab (multipart CSV): idempotent import as described in CLAUDE.md; returns created/linked counts and unrecognised columns.
 
-Frontend (/today):
-1. "Generate plan with AI" -> preview with task, suggested hours, and reason. User can remove, reorder, and edit hours, then confirm.
-2. If a plan already exists for that date, confirm before replacing it.
+Frontend:
+1. Admin > Dropdowns: tabs for Activities, Activity groups (member picker with order), O&M projects, Work set-ups; Categories get the "Has O&M project" flag; Projects get categories (multi-select) and activity group.
+2. Admin > Dropdowns: "Import from sheet" (upload, then show the result counts).
 
 Acceptance:
-- Tests with FakeProvider: foreign and completed task IDs dropped; hours trimmed; nothing saved until the confirm call.
+- Tests: import of the sample is idempotent (second run creates nothing); case-insensitive matching; shared activities linked to several groups; existing values reused, never deleted.
 - Usable at 360px in both themes.
 ```
 
 ---
 
-## Phase 15 — AI Team Summary
+## Phase 15 — Prod Log Fields
 
 ```
-Do Phase 15 only.
+Do Phase 15 only. Read the prod_logs model and its Rules ("Linked dropdowns", "Planned and actual") in CLAUDE.md.
+
+Backend:
+1. prod_logs: add work_setup_id (required), activity_id (required), om_project_id, is_planned, planned_hours, deviation_reason; hours_spent and title become nullable; CHECK planned or actual present. Backfill existing rows: a "General" activity, the default work set-up, is_planned = false.
+2. Create/update validate the linked-dropdown rules (project in category, activity in project's group, O&M project only for requires_om_project categories); project required for new rows. For now is_planned = true whenever planned_hours is given (Phase 16 replaces this with the deadline rule). 24-hour caps apply separately to actual and planned totals per day.
+3. List/team endpoints and filters return and accept the new fields (activity_id filter).
+4. Dashboards: actual hours only; add hours by activity (personal, team); personal daily chart also returns planned hours.
+5. Phase 13 AI draft: extend with activity_id, work_setup_id, om_project_id, planned_hours, validated with the same linked rules.
+
+Frontend:
+1. Log form in the sheet's order: Date, Work set-up, Planned hours, Actual hours, Category, Project (filtered by category), Activity (filtered by project), Project (For O&M) (only when the category needs it), Task, Note, Remarks, Reason for deviation (when actual differs from planned). Changing category clears an invalid project; changing project clears an invalid activity.
+2. Log lists: activity as the main label, project / category, planned vs actual, work set-up and "Unplanned" badges; day totals for actual and planned.
+3. Dashboard: hours by activity; planned vs actual on the daily chart.
+
+Acceptance:
+- Tests: backfill; each linked-dropdown rule; separate caps; dashboards ignore rows without actual.
+- Usable at 360px in both themes.
+```
+
+---
+
+## Phase 16 — Weekly Planning
+
+```
+Do Phase 16 only. Read "Planning deadline", "Planned and actual", "Reminder and status" and "Copy a plan" in CLAUDE.md.
+
+Backend:
+1. PLAN_DEADLINE_TIME setting (Friday, APP_TIMEZONE). One helper computes a date's week (Monday to Friday), its deadline and whether it is open; used everywhere.
+2. is_planned set by the server on create from the deadline; planned_hours changes and planned-row deletes rejected in locked weeks (422 `week_locked`) for non-admins. Admin can set is_planned.
+3. Remove daily plans: drop daily_plans and daily_plan_items (migration), endpoints, services, tests.
+4. POST /api/logs/copy { from_date | from_week, to_dates[] } into open weeks only; skips over-cap days and inactive values; reports skipped days. One transaction.
+5. GET /api/planning/status?week= : the caller's own status; GET /api/teams/{id}/planning/status?week= for manager (own team) / admin: per member planned hours per day and has_planned.
+
+Frontend:
+1. /today: the day's rows (?date=), planned vs actual and totals against WORKDAY_HOURS; inline actual hours, "Actual = planned", edit, delete; "Add unplanned activity". Locked weeks show planned hours read-only.
+2. "Plan next week": a week view (Mon to Fri) of next week's planned rows with "Copy this week's plan" and "Copy a day to the week"; deadline countdown.
+3. Reminder banner (Friday until the deadline, when next week has no planned rows) on /today and /logs.
+4. Team dashboard: "Next week's plan" card per member (manager own team, admin any).
+5. Remove the old daily plan UI.
+
+Acceptance:
+- Tests: deadline edges (Friday 18:29 vs 18:30 in APP_TIMEZONE); is_planned not settable by users; locked planned hours and deletes; admin override; copy only into open weeks; status scoping.
+- Usable at 360px in both themes.
+```
+
+---
+
+## Phase 17 — Export Prod Logs
+
+```
+Do Phase 17 only. Read "Export" in CLAUDE.md.
+
+Backend:
+1. GET /api/logs/export?date_from&date_to[&user_id] -> text/csv attachment, filename "<username>_<from>_<to>_productivity_log.csv". Own logs for everyone; manager: members of own team (rows with that team snapshot); admin: any user; others 404. Columns and formats exactly as in CLAUDE.md. Excel-safe (UTF-8 with BOM; values starting with = + - @ prefixed with ').
+
+Frontend:
+1. /logs: "Export CSV" with a month picker (default this month) or custom range.
+2. /team/logs: export for the selected member.
+
+Acceptance:
+- Tests: column order and formats; scoping; formula-injection escaping.
+- Usable at 360px in both themes.
+```
+
+---
+
+## Phase 18 — Support Dictionary (replaces personal processes)
+
+```
+Do Phase 18 only.
+
+Backend:
+1. Remove processes: drop processes, process_steps, process_runs and tasks.process_run_id / process_step_id (migration), their endpoints, services, tests, and the run-progress dashboard data.
+2. support_types lookup (admin CRUD like categories). Seed Concern, Inquiry, Bug, Request, Data Modification, Transport.
+3. support_entries CRUD: everyone lists and reads all; any user creates; author or admin updates and activates/deactivates. List: search q (concern, cause, resolution, notes, project, module, sub-module; case-insensitive), filters type_id, project, module, include_inactive; paginated, newest first. GET /api/support/facets returns distinct projects and modules for filter and autocomplete.
+4. POST /api/admin/support/import (multipart CSV, the team's format): maps Type labels to support_types (case-insensitive, creating missing ones), trims values, skips blank-concern rows, returns created/skipped counts with row-level errors. Author column is kept as text in notes when it does not match a username; created_by = the importing admin.
+
+Frontend:
+1. /support: search box, filters (type, project, module, show inactive), result cards (type badge, project / module / sub-module, concern; expand for cause, resolution, notes, query in a monospace block with a Copy button).
+2. /support/:id detail and create/edit form (project and module with suggestions from facets). Deactivate/activate with confirmation.
+3. Admin: Support import (upload, preview counts, result).
+4. Remove /processes and /runs routes, nav entries and the run-progress widget.
+
+Acceptance:
+- Tests: a user can edit their own entry; editing someone else's entry returns 403 `not_author` (it is readable, so not 404); admin can edit any; search and filters; import of the sample CSV.
+- Usable at 360px in both themes.
+```
+
+---
+
+## Phase 19 — AI Multi-Row Log Entry and Planning (replaces AI daily plan)
+
+```
+Do Phase 19 only.
+
+Backend:
+1. POST /api/ai/log-draft returns { rows: [...] } (max 20 rows). Each row as in CLAUDE.md, AI Layer, feature 1. Context adds activities, work set-ups and the weekday of today; the prompt explains planned (future or "I will") vs actual ("I did") rows, date ranges ("Tuesday to Friday"), and "per day" vs "per week" hours (per week is split evenly across the days and stated in missing_fields if ambiguous).
+2. Post-process per row as in Phase 13 and the linked-dropdown rules, plus: drop rows with no date; cap row count; a row in a locked week cannot carry planned hours (if its date is today or earlier, planned becomes actual; otherwise the hours are cleared and listed in missing_fields).
+3. POST /api/logs/bulk { rows[] }: create all or none, same validation and caps as single create; field errors keyed by row index (rows.2.category_id).
+
+Frontend:
+1. The AI card opens a review table/cards of draft rows: edit each row inline (same fields as the log form), remove rows, missing fields highlighted; "Save N rows" uses the bulk endpoint.
+2. Single-row drafts may still open the normal log form.
+
+Acceptance:
+- Tests with FakeProvider: multi-row output validated per row; foreign task IDs and inactive values stripped; bulk create all-or-nothing; caps enforced.
+- Manual check with the real provider: "I will work on the workforce API next week Tuesday to Friday 4 hrs a day" gives four planned rows; "next week 4 hrs a day" gives five (Monday to Friday); five other varied sentences give sensible drafts.
+- Usable at 360px in both themes.
+```
+
+---
+
+## Phase 20 — AI Team Summary
+
+```
+Do Phase 20 only.
 
 Backend:
 1. POST /api/ai/team-summary { team_id, period_start, period_end, regenerate }.
@@ -434,10 +559,10 @@ Acceptance:
 
 ---
 
-## Phase 16 — Hardening
+## Phase 21 — Hardening
 
 ```
-Do Phase 16 only.
+Do Phase 21 only.
 
 Build:
 1. One parametrised permission test covering every row of the CLAUDE.md permission matrix for admin, manager, and dev.
@@ -454,10 +579,10 @@ Acceptance:
 
 ---
 
-## Phase 17 — Deployment to the Staging VM
+## Phase 22 — Deployment to the Staging VM
 
 ```
-Do Phase 17 only. Read the "Deployment Architecture" and "Non-Functional Requirements" sections of CLAUDE.md first.
+Do Phase 22 only. Read the "Deployment Architecture" and "Non-Functional Requirements" sections of CLAUDE.md first.
 
 Context: the staging VM is small (assumed 2 GB RAM) and is exposed through an existing cloudflared tunnel. Images are built on this PC and transferred to the VM. Nothing is built on the VM.
 

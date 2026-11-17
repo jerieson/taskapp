@@ -2,18 +2,22 @@
  * Create / edit form for a prod log, rendered inside a Modal.
  *
  * Choosing a task pre-fills the project and category from it (both stay editable).
- * A new log can also start from a task (`prefill`, e.g. "Log work" on the daily plan).
+ * A new log can also start from a task (`prefill`, e.g. "Log work" on the daily plan)
+ * or from an AI draft (`draft`): required fields the AI left empty are highlighted
+ * until filled in.
  * Only the author can link a task: tasks are private, so an admin editing someone
  * else's log keeps the existing link and does not see the task list.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { ComponentProps } from 'react'
-import { useForm } from 'react-hook-form'
+import type { ComponentProps, ReactNode } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
+import type { LogDraft, LogDraftField } from '../../api/ai'
 import { errorMessage } from '../../api/client'
 import { useCreateLog, useUpdateLog, type ProdLog } from '../../api/logs'
 import { useTaskOptions, type Task } from '../../api/tasks'
+import { SparklesIcon } from '../../components/icons'
 import { InputField, SelectField, SubmitButton, TextareaField } from '../../components/FormField'
 import LookupSelect from '../../components/LookupSelect'
 import { useToast } from '../../components/toast-context'
@@ -57,6 +61,11 @@ interface LogFormProps {
   isOwn: boolean
   /** New log only: start from this task, date and hours. */
   prefill?: LogPrefill
+  /** New log only: start from an AI draft. */
+  draft?: LogDraft
+  /** Called after a successful save, before onDone. */
+  onSaved?: (log: ProdLog) => void
+  /** Called after saving and on cancel. */
   onDone: () => void
 }
 
@@ -66,7 +75,21 @@ export interface LogPrefill {
   hours?: number | null
 }
 
-function defaultValues(log: ProdLog | null, prefill?: LogPrefill): LogForm {
+const asString = (value: number | string | null) => (value === null ? '' : String(value))
+
+function defaultValues(log: ProdLog | null, prefill?: LogPrefill, draft?: LogDraft): LogForm {
+  if (draft) {
+    // The backend only returns active values the user may choose.
+    return {
+      log_date: draft.log_date ?? '',
+      title: draft.title ?? '',
+      hours_spent: asString(draft.hours_spent),
+      task_id: asString(draft.task_id),
+      project_id: asString(draft.project_id),
+      category_id: asString(draft.category_id),
+      description: draft.description ?? '',
+    }
+  }
   if (log) {
     return {
       log_date: log.log_date,
@@ -93,7 +116,14 @@ function defaultValues(log: ProdLog | null, prefill?: LogPrefill): LogForm {
   }
 }
 
-export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProps) {
+const MISSING_HINT: ReactNode = (
+  <span className="flex items-center gap-1.5">
+    <span className="badge badge-warning badge-sm">Missing</span>
+    Not found in your description
+  </span>
+)
+
+export default function LogFormBody({ log, isOwn, prefill, draft, onSaved, onDone }: LogFormProps) {
   const toast = useToast()
   const create = useCreateLog()
   const update = useUpdateLog()
@@ -103,11 +133,21 @@ export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProp
     handleSubmit,
     setError,
     setValue,
+    control,
     formState: { errors },
   } = useForm<LogForm>({
     resolver: zodResolver(logSchema),
-    defaultValues: defaultValues(log, prefill),
+    defaultValues: defaultValues(log, prefill, draft),
   })
+
+  /** Highlight for a required field the AI draft left empty, until it is filled in. */
+  const values = useWatch({ control })
+  function missing(field: LogDraftField, kind: 'input' | 'select') {
+    if (!draft?.missing_fields.includes(field) || values[field]?.trim() || errors[field]) {
+      return {}
+    }
+    return { hint: MISSING_HINT, className: `${kind}-warning` }
+  }
 
   /** Copy the task's project and category (active ones only: others can't be chosen). */
   function prefillFrom(task: Task) {
@@ -128,6 +168,7 @@ export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProp
     }
     const options = {
       onSuccess: (saved: ProdLog) => {
+        onSaved?.(saved)
         toast.success(log ? `Saved “${saved.title}”` : `Logged ${saved.hours_spent} h`)
         onDone()
       },
@@ -147,11 +188,18 @@ export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProp
           editor.
         </p>
       )}
+      {draft && (
+        <div role="status" className="alert alert-info mb-2 text-sm">
+          <SparklesIcon className="size-4" />
+          <span>Drafted by AI. Check every field before saving.</span>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
         <InputField
           label="Date"
           type="date"
           error={errors.log_date?.message}
+          {...missing('log_date', 'input')}
           {...register('log_date')}
         />
         <InputField
@@ -162,14 +210,16 @@ export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProp
           min="0.25"
           max="24"
           error={errors.hours_spent?.message}
+          {...missing('hours_spent', 'input')}
           {...register('hours_spent')}
         />
       </div>
       <InputField
         label="Title"
-        autoFocus={!log && !prefill}
+        autoFocus={!log && !prefill && !draft}
         autoComplete="off"
         error={errors.title?.message}
+        {...missing('title', 'input')}
         {...register('title')}
       />
       {isOwn ? (
@@ -204,6 +254,7 @@ export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProp
           current={log?.category}
           emptyLabel="Choose a category"
           error={errors.category_id?.message}
+          {...missing('category_id', 'select')}
           {...register('category_id')}
         />
       </div>

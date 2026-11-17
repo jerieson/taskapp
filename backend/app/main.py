@@ -9,6 +9,7 @@ from app.api.routers import (
     admin_overview,
     admin_teams,
     admin_users,
+    ai,
     auth,
     daily_plans,
     dashboard,
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
         teams,
         team_dashboard,
         dashboard,
+        ai,
     ):
         app.include_router(module.router, prefix="/api")
     for router in (lookups.categories, lookups.statuses, lookups.priorities):

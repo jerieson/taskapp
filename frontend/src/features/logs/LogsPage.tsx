@@ -20,6 +20,7 @@ import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useToast } from '../../components/toast-context'
 import { formatDay, formatHours } from '../../lib/format'
+import AiLogEntry from '../ai/AiLogEntry'
 import LogFormBody from './LogForm'
 import LogList, { LogListSkeleton } from './LogList'
 
@@ -150,6 +151,8 @@ export default function LogsPage() {
         description="What you worked on each day. A day can hold at most 24 hours."
         actions={newButton}
       />
+
+      <AiLogEntry className="mb-4" />
 
       <Filters value={filters} onChange={changeFilters} />
 

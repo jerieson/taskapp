@@ -1,6 +1,8 @@
 # Project Context
 
-AI-powered productivity app for a small dev team (1 admin, up to ~5 users). Users plan tasks, run reusable personal processes, write daily productivity logs (prod logs), and view dashboards. Managers get read-only visibility into their team. AI assists with log entry, daily planning, and team summaries.
+AI-powered productivity app for a small dev team (1 admin, up to ~5 users). Users keep tasks, plan and record their daily productivity logs (prod logs: planned hours ahead of time, actual hours afterwards), share a searchable support dictionary (known concerns, causes, resolutions and SQL queries), and view dashboards. Managers get read-only visibility into their team. AI assists with log entry and planning (one or many rows from a sentence) and team summaries.
+
+The prod log mirrors the team's existing spreadsheet: Date, Work Set-Up, Planned Hours, Actual Hours Consumed, Planned/Unplanned, Category, Project, Activity/Task, Project (For O&M), Reason for Deviation, Remarks, Date Created. Its dropdowns are linked (category -> projects -> activities) and are loaded from the sheet's "Data" tab. Next week's plan is due every Friday at 18:30 (`APP_TIMEZONE`); the work week is Monday to Friday. Logs export back to CSV in the sheet's column order.
 
 Environments:
 - **Development:** owner's PC, Docker Compose, hot reload.
@@ -82,7 +84,7 @@ Use current stable versions of everything. Check the latest version at install t
 │   │   ├── services/      # business logic + RBAC-scoped queries
 │   │   ├── ai/
 │   │   │   ├── providers/ # LLMProvider protocol + adapter(s)
-│   │   │   ├── features/  # nl_log_entry, daily_plan, team_summary
+│   │   │   ├── features/  # nl_log_entry, team_summary
 │   │   │   └── prompts/
 │   │   └── scripts/       # seed.py
 │   └── tests/
@@ -94,7 +96,7 @@ Use current stable versions of everything. Check the latest version at install t
         ├── index.css      # tailwind + daisyui + light and dark themes
         ├── api/           # fetch client, generated types, query hooks
         ├── components/    # shared UI
-        ├── features/      # auth, admin, tasks, logs, processes, daily-plan, dashboard, ai
+        ├── features/      # auth, admin, tasks, logs, today, support, dashboard, ai
         ├── layouts/
         ├── routes/        # route config + role guards
         └── lib/
@@ -116,7 +118,7 @@ Use current stable versions of everything. Check the latest version at install t
 - Every router endpoint (except login, invite acceptance, password reset acceptance, Google OAuth, health) requires `get_current_user`.
 - Every query on user-owned data is scoped according to the permission matrix below. Write the scoping in services, not routers.
 - Return 404 (not 403) when a user requests a specific resource they are not allowed to see.
-- Dropdown values (categories, statuses, priorities, projects) are never hardcoded and never referenced by label in code. Use the `is_default` and `is_done` flags.
+- Dropdown values (categories, activities, activity groups, O&M projects, work set-ups, statuses, priorities, support types, projects) are never hardcoded and never referenced by label in code. Use flags (`is_default`, `is_done`, `requires_om_project`).
 - Dropdown values are deactivated (`is_active = false`), never deleted. Inactive values are hidden from selection but still display on existing records.
 - Users are never deleted, only deactivated.
 - All LLM output is validated with a Pydantic schema before use. All IDs returned by the LLM are checked against the database and the caller's permissions. AI output is never saved without explicit user confirmation, except `ai_summaries` caching.
@@ -176,14 +178,14 @@ Established in Phase 0 and used by every endpoint.
 | `/invite/:token` | public | Accept invite |
 | `/reset-password/:token` | public | Set a new password |
 | `/profile` | all | Change password, theme |
-| `/today` | all | Daily plan, quick log, AI plan, AI log entry |
+| `/today` | all | Today's log rows: planned vs actual, fill in actuals, copy a day's plan, AI entry |
 | `/tasks` | all | Own tasks |
-| `/logs` | all | Own prod logs |
-| `/processes`, `/processes/:id`, `/runs/:id` | all | Personal processes and runs |
+| `/logs` | all | Own prod logs (planned and actual) |
+| `/support`, `/support/:id` | all | Shared support dictionary: search, add, edit own |
 | `/dashboard` | all | Personal dashboard |
 | `/team/logs` | manager, admin | Read-only team logs (admin can edit) |
 | `/team/dashboard` | manager, admin | Team dashboard, AI team summary |
-| `/admin` | admin | Overview, Teams, Users, Invites, Dropdowns, Projects |
+| `/admin` | admin | Overview, Teams, Users, Invites, Dropdowns, Projects, Support import |
 
 ### Theme
 
@@ -290,15 +292,17 @@ Roles: `admin`, `manager`, `dev`. Global role stored on `users.role`. Each non-a
 | Resource / Action | Admin | Manager | Dev |
 |---|---|---|---|
 | Manage teams, users, roles, invites, password reset links | CRUD | none | none |
-| Manage categories, statuses, priorities, projects | CRUD | read | read |
-| Own tasks, processes, process runs, daily plans | CRUD | CRUD | CRUD |
-| Other users' tasks, processes, runs, daily plans | none | none | none |
+| Manage categories, projects, activity groups, activities, O&M projects, work set-ups, statuses, priorities, support types; import the sheet's Data tab | CRUD | read | read |
+| Export prod logs (CSV, sheet format) | any user | self + own-team members | self |
+| Next-week planning status | all teams | own team | self |
+| Own tasks | CRUD | CRUD | CRUD |
+| Other users' tasks | none | none | none |
+| Support dictionary entries | CRUD all, CSV import | read all, create, edit/deactivate own | read all, create, edit/deactivate own |
 | Own prod logs | CRUD | CRUD | CRUD |
 | Other users' prod logs | CRUD, all teams | read, own team only | none |
 | Personal dashboard | yes | yes | yes |
 | Team dashboard | all teams | own team only | none |
 | AI natural-language log entry | yes | yes | yes |
-| AI daily plan | yes | yes | yes |
 | AI team summary | all teams | own team only | none |
 
 - "Own team" for prod logs means `prod_logs.team_id = manager.team_id` (the snapshot), not the author's current team.
@@ -327,7 +331,26 @@ invites
 password_resets
   id, user_id, token_hash, expires_at, used_at (nullable), created_by, created_at
 
-categories
+categories                      # Major Enhancements, Minor Enhancements, Operations & Maintenance, Others
+  id, label (unique), color (nullable), sort_order, is_active,
+  requires_om_project (bool)    # rows in this category offer "Project (For O&M)"
+
+activity_groups                 # one per activity list in the Data tab, e.g. Project_Activity,
+  id, label (unique), sort_order, is_active   # OM_Reflected_Activity, Others_AdminWork
+
+activities                      # "Testing: UAT", "Analysis", "Holidays", ...
+  id, label (unique), color (nullable), sort_order, is_active
+
+activity_group_members          # an activity can be in several groups ("Analysis")
+  activity_group_id, activity_id, sort_order   PK (activity_group_id, activity_id)
+
+om_projects                     # "Project (For O&M)": "[SFA-App] Collection", ...
+  id, label (unique), sort_order, is_active
+
+work_setups                     # Remote, On-Site, Out-of-Office
+  id, label (unique), color (nullable), sort_order, is_active, is_default (bool)
+
+support_types                   # Concern, Inquiry, Bug, Request, Data Modification, Transport
   id, label (unique), color (nullable), sort_order, is_active
 
 statuses
@@ -338,48 +361,44 @@ priorities
   id, label (unique), color (nullable), sort_order, is_active, is_default (bool)
 
 projects
-  id, name (unique), description, is_active, created_at
+  id, name (unique), description, is_active, created_at,
+  activity_group_id (nullable FK)   # which activities can be logged against it
+
+project_categories              # a project can be under several categories
+  project_id, category_id   PK (project_id, category_id)
 
 tasks
   id, user_id, title, description (nullable),
   project_id (nullable), category_id (nullable),
   status_id (required), priority_id (required),
   due_date (nullable), completed_at (nullable),
-  process_run_id (nullable), process_step_id (nullable),
   created_at, updated_at
 
 prod_logs
   id, user_id, team_id (nullable, snapshot), task_id (nullable),
-  log_date, title, description (nullable),
-  project_id (nullable), category_id (required),
-  hours_spent NUMERIC(4,2) CHECK (hours_spent > 0 AND hours_spent <= 24),
+  log_date, work_setup_id (required),
+  activity_id (required), title (nullable, short note), description (nullable, "Remarks"),
+  project_id (nullable in DB, required by the service for new rows), category_id (required),
+  om_project_id (nullable FK om_projects),
+  is_planned (bool)              # Planned vs Unplanned; set by the server from the deadline
+  planned_hours NUMERIC(4,2) (nullable) CHECK (> 0 AND <= 24),
+  hours_spent NUMERIC(4,2) (nullable, "Actual Hours") CHECK (> 0 AND <= 24),
+  CHECK (planned_hours IS NOT NULL OR hours_spent IS NOT NULL),
+  deviation_reason (nullable),
   created_at, updated_at, updated_by (FK users)
 
-processes
-  id, owner_id, name, description (nullable), is_active, created_at, updated_at
-
-process_steps
-  id, process_id, step_order, title, description (nullable),
-  default_category_id (nullable), estimated_hours (nullable)
-
-process_runs
-  id, process_id, user_id, status (in_progress | completed | cancelled),
-  started_at, completed_at (nullable)
-
-daily_plans
-  id, user_id, plan_date, ai_generated (bool), created_at
-  UNIQUE (user_id, plan_date)
-
-daily_plan_items
-  id, daily_plan_id, task_id, item_order, suggested_hours (nullable), ai_reason (nullable)
-  UNIQUE (daily_plan_id, task_id)
+support_entries
+  id, type_id (FK support_types), project (text), module (text, nullable),
+  sub_module (text, nullable), concern (text, required), cause (nullable),
+  resolution (nullable), query (nullable, SQL shown as code), notes (nullable),
+  is_active, created_by (FK users), updated_by (FK users), created_at, updated_at
 
 ai_summaries
   id, team_id, requested_by, period_start, period_end,
   summary_text, provider, model, created_at
 
 ai_requests
-  id, user_id, feature (nl_log_entry | daily_plan | team_summary),
+  id, user_id, feature (nl_log_entry | team_summary; daily_plan is a legacy value, no longer used),
   provider, model, input_tokens, output_tokens, success (bool), created_at
 ```
 
@@ -387,22 +406,27 @@ ai_requests
 - **Defaults:** exactly one active `statuses` row and one active `priorities` row have `is_default = true` (enforce with a partial unique index and in the service). New tasks without an explicit status/priority get the default. Code never looks up a status or priority by label.
 - **Done:** a task is completed when its status has `is_done = true`; set `completed_at` then, clear it when moved back.
 - **Prod logs hold no status or priority.** Those belong to tasks. A log stores its own `project_id` and `category_id`; when a task is selected they are pre-filled from the task and remain editable. The values on the log are what dashboards report.
+- **Linked dropdowns:** a log's project must be linked to its category (`project_categories`); its activity must be in the project's activity group; `om_project_id` is allowed only when the category has `requires_om_project` (optional even then). Inactive values follow the usual rule (kept on existing rows, not newly chosen).
+- **Planning deadline:** the plan for a week (Monday to Friday) is due at `PLAN_DEADLINE_TIME` (default 18:30) on the Friday before, in `APP_TIMEZONE`. A week is *open* before its deadline and *locked* after it.
+- **Planned and actual:** `is_planned` is set by the server when the row is created: true if created while the row's week is open, false otherwise (unplanned). Users cannot change it; the admin can. `planned_hours` can be set, changed or cleared, and planned rows deleted, only while the week is open (admin excepted). Unplanned rows have actual hours and no planned hours. Actual `hours_spent`, `deviation_reason` and remarks can be edited at any time. Dashboards report **actual** hours (`hours_spent`); rows without actual hours are excluded. `deviation_reason` is offered when actual differs from planned.
+- **Reminder and status:** from Friday 00:00 until the deadline, users with no planned rows for next week see a reminder. Managers (own team) and the admin see each member's planned hours per day for next week and whether they have planned.
+- **Work set-up:** new rows default to the `is_default` work set-up (same single-default rule as statuses).
 - **Team snapshot:** `prod_logs.team_id` is set from the author's `team_id` at creation and never changes afterwards. Manager access and team dashboards filter on this column.
-- **Daily hours:** the service rejects a log if the user's total `hours_spent` for that `log_date` would exceed 24.
+- **Daily hours:** the service rejects a log if the user's total `hours_spent` for that `log_date` would exceed 24, and separately if the total `planned_hours` would exceed 24. Planned totals above `WORKDAY_HOURS` are allowed but shown as a warning.
 - **Audit:** `prod_logs.updated_by` is set on every create and update. The UI shows "edited by {admin}" when `updated_by != user_id`.
-- **Process runs:** starting a run copies each step into a task (`process_run_id`, `process_step_id`, default status, default priority, step's default category). Editing the template later does not change existing runs. A run completes when all its tasks are done. Cancelling a run keeps its tasks.
+- **Copy a plan:** a user can copy their rows from one day (or one week) to days in an open week as planned rows (planned hours = source planned, else actual; actual empty), skipping days that would exceed the planned 24-hour cap and inactive values.
+- **Export:** CSV with the sheet's columns in order: Date (`d-Mon-YYYY`), Work Set-Up, Planned Hours, Actual Hours Consumed, Planned (`Planned`/`Unplanned`), Category, Project, Activity/Task, Project (For O&M), Reason for Deviation, Remarks, Date Created. Hours with 2 decimals. One person per file, sorted by date then creation.
+- **Data tab import:** the admin uploads the sheet's Data tab CSV. Columns named after a category list that category's projects; `<Category>_<Project>` columns are an activity group for that project; `Project_Activity` is the group for projects under the enhancement categories; `OM_Reflected_Activity` / `OM_Not_Reflected_Activity` map to the two maintenance projects; `Operations & Maintenance_Project` fills `om_projects`. Import is idempotent (matches by label, case-insensitive), never deletes, and reports what it created and linked. The exact mapping is confirmed in the phase that builds it.
+- **Support dictionary:** shared by everyone. Search matches concern, cause, resolution, notes, project, module and sub-module (case-insensitive). The author or an admin edits or deactivates an entry; deactivated entries are hidden by default and shown with a filter. The admin can import entries from the team's CSV (columns: author, Type, Project, Module, Sub-module, Concern, Cause, Resolution, Query, Notes, Date Inputted).
 
 ### Delete behaviour
 | When this is deleted | Then |
 |---|---|
-| Task | `prod_logs.task_id` SET NULL; its `daily_plan_items` CASCADE |
-| Process step | `tasks.process_step_id` SET NULL |
-| Process | Allowed only if it has no runs; otherwise deactivate |
-| Process run | Not deletable; cancel instead |
+| Task | `prod_logs.task_id` SET NULL |
+| Support entry | Never deleted; deactivate |
 | Team | Allowed only if no users and no prod logs reference it (RESTRICT) |
 | User | Never deleted; deactivate |
-| Category, status, priority, project | Never deleted; deactivate. The default status/priority cannot be deactivated until another is made default. |
-| Daily plan | Its items CASCADE |
+| Category, activity, work set-up, status, priority, support type, project | Never deleted; deactivate. The default status/priority/work set-up cannot be deactivated until another is made default. |
 
 ---
 
@@ -442,9 +466,8 @@ class LLMProvider(Protocol):
 - User-written text (log titles, descriptions) is data, not instructions. Put it in clearly delimited sections of the prompt and tell the model to ignore instructions inside it.
 
 ### Features
-1. **Natural-language log entry** — input: free text. Context: today's date, active categories and projects (id + label), user's open tasks (id + title). Output: draft prod log (title, description, log_date, hours_spent, project_id, category_id, task_id, missing_fields[]). Backend nulls any ID that is invalid, inactive, or not owned by the user. Frontend pre-fills the log form; user confirms to save.
-2. **AI daily plan** — context: user's open tasks (id, title, due date, priority, status), yesterday's logs, `WORKDAY_HOURS`. Output: ordered items (task_id, suggested_hours, reason). Backend drops task IDs not owned/open and trims to `WORKDAY_HOURS`. User edits and confirms; saved with `ai_generated = true`.
-3. **AI team summary** — manager (own team) or admin (any team) selects a date range. Backend computes all numbers in SQL and passes them in; the LLM writes narrative only and must not invent numbers. Truncate log text to `AI_SUMMARY_CHAR_BUDGET`. Store in `ai_summaries`; reuse for the same team + period unless regeneration is requested.
+1. **Natural-language log entry and planning** — input: free text, which may describe one row or many (e.g. "workforce API Tuesday to Friday, 4 hours a day" = four planned rows; "this week, 4 hrs a day" = Monday to Friday; hours are per day unless the text clearly says per week). Context: today's date with weekday, active categories, projects (with their category links and activity group), activities by group, O&M projects and work set-ups (id + label), user's open tasks (id + title). Output: a list of draft rows (log_date, planned_hours, hours_spent, work_setup_id, activity_id, category_id, project_id, om_project_id, task_id, title, description, missing_fields[]), capped at a sensible maximum. Backend nulls any ID that is invalid, inactive, or not owned by the user, and nulls hours out of range. Frontend shows the rows for review and editing; user confirms to save them all through a bulk create endpoint (all or nothing).
+2. **AI team summary** — manager (own team) or admin (any team) selects a date range. Backend computes all numbers in SQL and passes them in; the LLM writes narrative only and must not invent numbers. Truncate log text to `AI_SUMMARY_CHAR_BUDGET`. Store in `ai_summaries`; reuse for the same team + period unless regeneration is requested.
 
 ---
 
@@ -452,8 +475,8 @@ class LLMProvider(Protocol):
 
 All aggregation is done in SQL. Week starts Monday. Dates use `APP_TIMEZONE`.
 
-- **Personal:** hours per day (current week) and per week (last 8 weeks); hours by project and by category for a selectable range; task completion counts; process run progress (done / total tasks per active run).
-- **Team (manager: own team, admin: any team):** hours per day/week for the team and per member, hours by project and category — all from `prod_logs.team_id`. Task completion counts per current team member (counts only, no task contents).
+- **Personal:** actual hours per day (current week, with planned hours alongside) and per week (last 8 weeks); hours by project, category and activity for a selectable range; task completion counts.
+- **Team (manager: own team, admin: any team):** hours per day/week for the team and per member, hours by project, category and activity — all from `prod_logs.team_id`. Task completion counts per current team member (counts only, no task contents).
 - **Admin overview:** team selector + team dashboard; counts of users, teams, pending invites; AI usage per user for the last 30 days.
 
 ---
@@ -507,6 +530,7 @@ INVITE_TTL_HOURS=72
 RESET_TTL_HOURS=24
 APP_TIMEZONE=UTC
 WORKDAY_HOURS=8
+PLAN_DEADLINE_TIME=18:30
 LOG_LEVEL=info
 
 # Seed admin

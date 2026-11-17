@@ -4,6 +4,7 @@
  * An ordered list of the user's own tasks with planned hours, compared against
  * WORKDAY_HOURS. Tasks are added from a searchable picker of open tasks; each item can
  * be moved up/down, have its hours changed, be marked done, or start a prod log.
+ * Above the plan, "Describe what you worked on" drafts a log with AI.
  */
 import { useSearchParams } from 'react-router'
 import { useState } from 'react'
@@ -24,6 +25,7 @@ import PageHeader from '../../components/PageHeader'
 import { SkeletonCard } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
 import { formatDayWithWeekday, todayIso } from '../../lib/format'
+import AiLogEntry from '../ai/AiLogEntry'
 import LogFormBody, { type LogPrefill } from '../logs/LogForm'
 import DateNav from './DateNav'
 import PlanItemCard from './PlanItemCard'
@@ -103,6 +105,8 @@ export default function TodayPage() {
         }
         actions={addButton}
       />
+
+      <AiLogEntry className="mb-4" />
 
       <DateNav value={planDate} onChange={setPlanDate} />
 
