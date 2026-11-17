@@ -30,18 +30,9 @@ from app.schemas.tasks import (
     TaskState,
     TaskUpdate,
 )
+from app.services.refs import REFS, check_ref
 
 logger = logging.getLogger("app.tasks")
-
-type RefModel = type[Category] | type[Status] | type[Priority] | type[Project]
-
-# Request field -> (model, noun used in messages)
-_REFS: dict[str, tuple[RefModel, str]] = {
-    "status_id": (Status, "status"),
-    "priority_id": (Priority, "priority"),
-    "category_id": (Category, "category"),
-    "project_id": (Project, "project"),
-}
 
 _TaskRow = tuple[Task, Status, Priority, Category | None, Project | None]
 
@@ -101,15 +92,6 @@ async def _get_own(db: AsyncSession, user: User, task_id: int) -> Task:
     if task is None:
         raise _not_found()
     return task
-
-
-async def _check_ref(db: AsyncSession, field: str, value: int, keep: int | None) -> None:
-    """Load the referenced row; it must exist and be active unless it is `keep`."""
-    model, noun = _REFS[field]
-    row = await db.get(model, value)
-    if row is None or (not row.is_active and value != keep):
-        message = f"Choose an active {noun}"
-        raise AppError(422, "invalid_reference", message, fields={field: message})
 
 
 async def _default(db: AsyncSession, model: type[Status] | type[Priority], noun: str) -> int:
@@ -180,10 +162,10 @@ async def get_task(db: AsyncSession, user: User, task_id: int, today: date) -> T
 
 
 async def create_task(db: AsyncSession, user: User, data: TaskCreate, today: date) -> TaskOut:
-    for field in _REFS:
+    for field in REFS:
         value = getattr(data, field)
         if value is not None:
-            await _check_ref(db, field, value, keep=None)
+            await check_ref(db, field, value, keep=None)
     status_id = data.status_id or await _default(db, Status, "status")
     priority_id = data.priority_id or await _default(db, Priority, "priority")
     status = await db.get_one(Status, status_id)
@@ -211,11 +193,11 @@ async def update_task(
     task = await _get_own(db, user, task_id)
     sent = data.model_fields_set
 
-    for field in _REFS:
+    for field in REFS:
         if field in sent:
             value = getattr(data, field)
             if value is not None:
-                await _check_ref(db, field, value, keep=getattr(task, field))
+                await check_ref(db, field, value, keep=getattr(task, field))
 
     if "status_id" in sent and data.status_id != task.status_id:
         old = await db.get_one(Status, task.status_id)

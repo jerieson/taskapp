@@ -41,6 +41,23 @@ export function useTasks(filters: TaskFilters, sort: TaskSort, offset: number) {
   })
 }
 
+/**
+ * The user's tasks for selects (up to the API maximum per page): open tasks by due
+ * date, or with `openOnly = false` every task, newest first.
+ */
+export function useTaskOptions(openOnly = true) {
+  return useQuery({
+    queryKey: [...taskKeys.all, 'options', { openOnly }] as const,
+    queryFn: () =>
+      api.get<Schemas['Page_TaskOut_']>('/tasks', {
+        query: openOnly
+          ? { state: 'open', sort: 'due_date', limit: 200 }
+          : { sort: '-created_at', limit: 200 },
+      }),
+    select: (page) => page.items,
+  })
+}
+
 function useInvalidateTasks() {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: taskKeys.all })
@@ -64,9 +81,14 @@ export function useUpdateTask() {
 }
 
 export function useDeleteTask() {
-  const invalidate = useInvalidateTasks()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/tasks/${id}`),
-    onSuccess: invalidate,
+    // Logs linked to the task lose the link.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['logs'] }),
+      ]),
   })
 }

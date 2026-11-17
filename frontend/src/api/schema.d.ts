@@ -528,6 +528,93 @@ export interface paths {
         patch: operations["update_task_api_tasks__task_id__patch"];
         trace?: never;
     };
+    "/api/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Logs
+         * @description The caller's own logs, newest date first.
+         */
+        get: operations["list_logs_api_logs_get"];
+        put?: never;
+        /**
+         * Create Log
+         * @description Rejected (422 `daily_hours_exceeded`) if the day would total more than 24 hours.
+         */
+        post: operations["create_log_api_logs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/logs/{log_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Log */
+        get: operations["get_log_api_logs__log_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Log */
+        delete: operations["delete_log_api_logs__log_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Log
+         * @description Partial update by the author or an admin. The team snapshot never changes.
+         */
+        patch: operations["update_log_api_logs__log_id__patch"];
+        trace?: never;
+    };
+    "/api/teams/{team_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Team Logs
+         * @description Read-only. Filters on the team snapshot stored on each log, so logs stay with
+         *     the team they were written in when the author changes teams.
+         */
+        get: operations["list_team_logs_api_teams__team_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teams/{team_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Team Members
+         * @description Current members plus former members with logs under this team (for filters).
+         */
+        get: operations["list_team_members_api_teams__team_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/categories": {
         parameters: {
             query?: never;
@@ -1137,6 +1224,17 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** Page[ProdLogListItem] */
+        Page_ProdLogListItem_: {
+            /** Items */
+            items: components["schemas"]["ProdLogListItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** Page[ProjectOut] */
         Page_ProjectOut_: {
             /** Items */
@@ -1163,6 +1261,17 @@ export interface components {
         Page_TaskOut_: {
             /** Items */
             items: components["schemas"]["TaskOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[TeamMemberOut] */
+        Page_TeamMemberOut_: {
+            /** Items */
+            items: components["schemas"]["TeamMemberOut"][];
             /** Total */
             total: number;
             /** Limit */
@@ -1219,6 +1328,127 @@ export interface components {
             is_active: boolean;
             /** Is Default */
             is_default: boolean;
+        };
+        /**
+         * ProdLogCreate
+         * @description When `task_id` is given and project/category are omitted, they are copied from
+         *     the task (if those values are still active).
+         */
+        ProdLogCreate: {
+            /**
+             * Log Date
+             * Format: date
+             */
+            log_date: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Hours Spent
+             * @example 1.5
+             */
+            hours_spent: number | string;
+            /** Task Id */
+            task_id?: number | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Category Id */
+            category_id?: number | null;
+        };
+        /** ProdLogListItem */
+        ProdLogListItem: {
+            /** Id */
+            id: number;
+            user: components["schemas"]["UserRef"];
+            /** Team Id */
+            team_id: number | null;
+            /**
+             * Log Date
+             * Format: date
+             */
+            log_date: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Task Id */
+            task_id: number | null;
+            task: components["schemas"]["TaskRef"] | null;
+            project: components["schemas"]["ProjectRef"] | null;
+            category: components["schemas"]["LookupRef"];
+            /** Hours Spent */
+            hours_spent: number;
+            updated_by: components["schemas"]["UserRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Day Total Hours */
+            day_total_hours: number;
+        };
+        /** ProdLogOut */
+        ProdLogOut: {
+            /** Id */
+            id: number;
+            user: components["schemas"]["UserRef"];
+            /** Team Id */
+            team_id: number | null;
+            /**
+             * Log Date
+             * Format: date
+             */
+            log_date: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Task Id */
+            task_id: number | null;
+            task: components["schemas"]["TaskRef"] | null;
+            project: components["schemas"]["ProjectRef"] | null;
+            category: components["schemas"]["LookupRef"];
+            /** Hours Spent */
+            hours_spent: number;
+            updated_by: components["schemas"]["UserRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ProdLogUpdate
+         * @description Omitted fields keep their value. Send null to clear an optional field.
+         *
+         *     A category or project that has been deactivated may be kept but not newly chosen.
+         */
+        ProdLogUpdate: {
+            /** Log Date */
+            log_date?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Hours Spent */
+            hours_spent?: (number | string) | null;
+            /** Task Id */
+            task_id?: number | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Category Id */
+            category_id?: number | null;
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -1382,6 +1612,13 @@ export interface components {
              */
             updated_at: string;
         };
+        /** TaskRef */
+        TaskRef: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+        };
         /**
          * TaskSort
          * @description `priority` = highest first, `-priority` = lowest first.
@@ -1423,6 +1660,21 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * TeamMemberOut
+         * @description Someone who can appear in a team's logs: a current member, or a former member
+         *     with logs under this team.
+         */
+        TeamMemberOut: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Current Member */
+            is_current_member: boolean;
+        };
         /** TeamOut */
         TeamOut: {
             /** Id */
@@ -1443,6 +1695,13 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /** UserRef */
+        UserRef: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
         };
     };
     responses: never;
@@ -2864,6 +3123,307 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_logs_api_logs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                date_from?: string | null;
+                date_to?: string | null;
+                project_id?: number | null;
+                category_id?: number | null;
+                task_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ProdLogListItem_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_log_api_logs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProdLogCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProdLogOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_log_api_logs__log_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProdLogOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_log_api_logs__log_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_log_api_logs__log_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProdLogUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProdLogOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_team_logs_api_teams__team_id__logs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                date_from?: string | null;
+                date_to?: string | null;
+                project_id?: number | null;
+                category_id?: number | null;
+                user_id?: number | null;
+            };
+            header?: never;
+            path: {
+                team_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ProdLogListItem_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_team_members_api_teams__team_id__members_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                team_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_TeamMemberOut_"];
                 };
             };
             /** @description Client error */

@@ -9,8 +9,10 @@ from app.api.routers import (
     invites,
     lookups,
     password_resets,
+    prod_logs,
     projects,
     tasks,
+    teams,
 )
 from app.core.config import get_settings
 from app.core.csrf import csrf_protect
@@ -56,6 +58,8 @@ def create_app() -> FastAPI:
         admin_invites,
         projects,
         tasks,
+        prod_logs,
+        teams,
     ):
         app.include_router(module.router, prefix="/api")
     for router in (lookups.categories, lookups.statuses, lookups.priorities):

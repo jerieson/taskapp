@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { errorMessage } from '../../api/client'
-import { useSelectOptions, type SelectKind } from '../../api/lookups'
+import { useSelectOptions } from '../../api/lookups'
 import {
   useDeleteTask,
   useTasks,
@@ -15,6 +15,7 @@ import ColorDot from '../../components/ColorDot'
 import ConfirmModal from '../../components/ConfirmModal'
 import DataTable, { type Column } from '../../components/DataTable'
 import EmptyState from '../../components/EmptyState'
+import FilterPanel, { LookupFilter } from '../../components/FilterPanel'
 import { InputField, SelectField } from '../../components/FormField'
 import {
   CheckSquareIcon,
@@ -85,37 +86,6 @@ function toTaskFilters(state: StateTab, f: FilterState): TaskFilters {
   }
 }
 
-function LookupFilter({
-  kind,
-  label,
-  allLabel,
-  value,
-  onChange,
-}: {
-  kind: SelectKind
-  label: string
-  allLabel: string
-  value: string
-  onChange: (value: string) => void
-}) {
-  const { options, isPending } = useSelectOptions(kind)
-  return (
-    <SelectField
-      label={label}
-      value={value}
-      disabled={isPending}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      <option value="">{allLabel}</option>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.label}
-        </option>
-      ))}
-    </SelectField>
-  )
-}
-
 function Filters({
   value,
   onChange,
@@ -123,90 +93,63 @@ function Filters({
   value: FilterState
   onChange: (value: FilterState) => void
 }) {
-  const [open, setOpen] = useState(false)
   const activeCount = Object.values(value).filter(Boolean).length
   const set = (patch: Partial<FilterState>) => onChange({ ...value, ...patch })
 
   return (
-    <div className="mb-4">
-      <button
-        type="button"
-        className="btn w-full md:hidden"
-        aria-expanded={open}
-        aria-controls="task-filters"
-        onClick={() => setOpen((o) => !o)}
+    <FilterPanel activeCount={activeCount} onClear={() => onChange(NO_FILTERS)}>
+      <LookupFilter
+        kind="statuses"
+        label="Status"
+        allLabel="Any status"
+        value={value.status}
+        onChange={(status) => set({ status })}
+      />
+      <LookupFilter
+        kind="priorities"
+        label="Priority"
+        allLabel="Any priority"
+        value={value.priority}
+        onChange={(priority) => set({ priority })}
+      />
+      <LookupFilter
+        kind="projects"
+        label="Project"
+        allLabel="Any project"
+        value={value.project}
+        onChange={(project) => set({ project })}
+      />
+      <LookupFilter
+        kind="categories"
+        label="Category"
+        allLabel="Any category"
+        value={value.category}
+        onChange={(category) => set({ category })}
+      />
+      <InputField
+        label="Due from"
+        type="date"
+        value={value.dueFrom}
+        max={value.dueTo || undefined}
+        onChange={(event) => set({ dueFrom: event.target.value })}
+      />
+      <InputField
+        label="Due until"
+        type="date"
+        value={value.dueTo}
+        min={value.dueFrom || undefined}
+        onChange={(event) => set({ dueTo: event.target.value })}
+      />
+      <SelectField
+        label="Source"
+        value={value.source}
+        onChange={(event) => set({ source: event.target.value })}
       >
-        <FilterIcon />
-        Filters
-        {activeCount > 0 && <span className="badge badge-sm badge-primary">{activeCount}</span>}
-      </button>
-      <div
-        id="task-filters"
-        className={`${open ? 'grid' : 'hidden'} mt-2 grid-cols-1 gap-x-3 sm:grid-cols-2 md:mt-0 md:grid md:grid-cols-4 md:items-end`}
-      >
-        <LookupFilter
-          kind="statuses"
-          label="Status"
-          allLabel="Any status"
-          value={value.status}
-          onChange={(status) => set({ status })}
-        />
-        <LookupFilter
-          kind="priorities"
-          label="Priority"
-          allLabel="Any priority"
-          value={value.priority}
-          onChange={(priority) => set({ priority })}
-        />
-        <LookupFilter
-          kind="projects"
-          label="Project"
-          allLabel="Any project"
-          value={value.project}
-          onChange={(project) => set({ project })}
-        />
-        <LookupFilter
-          kind="categories"
-          label="Category"
-          allLabel="Any category"
-          value={value.category}
-          onChange={(category) => set({ category })}
-        />
-        <InputField
-          label="Due from"
-          type="date"
-          value={value.dueFrom}
-          max={value.dueTo || undefined}
-          onChange={(event) => set({ dueFrom: event.target.value })}
-        />
-        <InputField
-          label="Due until"
-          type="date"
-          value={value.dueTo}
-          min={value.dueFrom || undefined}
-          onChange={(event) => set({ dueTo: event.target.value })}
-        />
-        <SelectField
-          label="Source"
-          value={value.source}
-          onChange={(event) => set({ source: event.target.value })}
-        >
-          <option value="">All tasks</option>
-          <option value="run">From a process run</option>
-          <option value="standalone">Not from a process run</option>
-        </SelectField>
-        <div className="fieldset">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={activeCount === 0}
-            onClick={() => onChange(NO_FILTERS)}
-          >
-            Clear filters
-          </button>
-        </div>
-      </div>
-    </div>
+        <option value="">All tasks</option>
+        <option value="run">From a process run</option>
+        <option value="standalone">Not from a process run</option>
+      </SelectField>
+    </FilterPanel>
   )
 }
 

@@ -9,10 +9,12 @@ import {
   AdminPage,
   InvitePage,
   LoginPage,
+  LogsPage,
   ProfilePage,
   PublicPage,
   ResetPasswordPage,
   TasksPage,
+  TeamLogsPage,
 } from './pages'
 import RouteErrorPage from './RouteErrorPage'
 
@@ -58,7 +60,7 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="/today" replace /> },
               { path: 'today', element: <PlaceholderPage title="Today" /> },
               { path: 'tasks', element: <TasksPage /> },
-              { path: 'logs', element: <PlaceholderPage title="Logs" /> },
+              { path: 'logs', element: <LogsPage /> },
               { path: 'processes', element: <PlaceholderPage title="Processes" /> },
               { path: 'processes/:id', element: <PlaceholderPage title="Process" /> },
               { path: 'runs/:id', element: <PlaceholderPage title="Process run" /> },
@@ -68,7 +70,7 @@ export const router = createBrowserRouter([
                 path: 'team/logs',
                 element: (
                   <RequireRole roles={TEAM_ROLES}>
-                    <PlaceholderPage title="Team logs" />
+                    <TeamLogsPage />
                   </RequireRole>
                 ),
               },
