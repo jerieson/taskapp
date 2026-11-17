@@ -60,7 +60,7 @@ export function useTaskOptions(openOnly = true) {
 
 /**
  * Daily plans and process runs embed their tasks (and run progress and status follow
- * task status), so they are refreshed along with the task lists.
+ * task status), and the dashboard counts them, so they are refreshed with the task lists.
  */
 function useInvalidateTasks() {
   const queryClient = useQueryClient()
@@ -70,6 +70,7 @@ function useInvalidateTasks() {
       queryClient.invalidateQueries({ queryKey: ['plans'] }),
       queryClient.invalidateQueries({ queryKey: ['runs'] }),
       queryClient.invalidateQueries({ queryKey: ['processes'] }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
     ])
 }
 
@@ -102,6 +103,7 @@ export function useDeleteTask() {
         queryClient.invalidateQueries({ queryKey: ['plans'] }),
         queryClient.invalidateQueries({ queryKey: ['runs'] }),
         queryClient.invalidateQueries({ queryKey: ['processes'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ]),
   })
 }

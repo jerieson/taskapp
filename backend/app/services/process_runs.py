@@ -108,6 +108,23 @@ async def list_runs(
     return Page[RunOut].build(items, total, params)
 
 
+async def list_my_runs(db: AsyncSession, user: User, params: RunQuery) -> Page[RunOut]:
+    """All of the caller's runs, whatever the process, newest first."""
+    stmt = (
+        select(ProcessRun, Process)
+        .join(Process, Process.id == ProcessRun.process_id)
+        .where(ProcessRun.user_id == user.id)
+    )
+    if params.status is not None:
+        stmt = stmt.where(ProcessRun.status == params.status)
+    stmt = stmt.order_by(ProcessRun.started_at.desc(), ProcessRun.id.desc())
+    total = await db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    rows = (await db.execute(stmt.limit(params.limit).offset(params.offset))).all()
+    progress = await _progress(db, [run.id for run, _ in rows])
+    items = [_run_out(run, process, progress[run.id]) for run, process in rows]
+    return Page[RunOut].build(items, total or 0, params)
+
+
 async def get_run(db: AsyncSession, user: User, run_id: int, today: date) -> RunDetail:
     return await _detail(db, user, await _get_own(db, user, run_id, lock=False), today)
 

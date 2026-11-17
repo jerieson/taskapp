@@ -53,3 +53,39 @@ export function shiftDay(isoDate: string, days: number): string {
   const date = new Date(Date.UTC(year, month - 1, day + days))
   return date.toISOString().slice(0, 10)
 }
+
+function parseDay(isoDate: string): Date {
+  const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+/** The Monday of the week containing `isoDate` (weeks start on Monday). */
+export function mondayOf(isoDate: string): string {
+  const weekday = (parseDay(isoDate).getDay() + 6) % 7 // Monday = 0
+  return shiftDay(isoDate, -weekday)
+}
+
+/** The first day of the month containing `isoDate`. */
+export function monthStartOf(isoDate: string): string {
+  return `${isoDate.slice(0, 8)}01`
+}
+
+const shortDayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short' })
+
+/** A calendar date without the year, e.g. "Nov 17". */
+export function formatShortDay(isoDate: string): string {
+  return shortDayFormat.format(parseDay(isoDate))
+}
+
+/** The weekday of a calendar date, e.g. "Tue". */
+export function formatWeekday(isoDate: string): string {
+  return weekdayFormat.format(parseDay(isoDate))
+}
+
+/** An inclusive date range, e.g. "Nov 10 – Nov 16, 2026" (or one day if equal). */
+export function formatDayRange(from: string, to: string): string {
+  if (from === to) return formatDay(from)
+  const sameYear = from.slice(0, 4) === to.slice(0, 4)
+  return `${sameYear ? formatShortDay(from) : formatDay(from)} – ${formatDay(to)}`
+}

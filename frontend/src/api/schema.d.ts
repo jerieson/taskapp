@@ -866,6 +866,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Runs
+         * @description All of the caller's runs across their processes, newest first.
+         */
+        get: operations["list_runs_api_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -939,6 +959,100 @@ export interface paths {
          * @description Current members plus former members with logs under this team (for filters).
          */
         get: operations["list_team_members_api_teams__team_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/hours/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hours Per Day
+         * @description Hours logged on each day of one week (Monday to Sunday).
+         */
+        get: operations["hours_per_day_api_dashboard_hours_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/hours/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hours Per Week
+         * @description Hours logged per week for the last 8 weeks, including the current one.
+         */
+        get: operations["hours_per_week_api_dashboard_hours_weekly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/hours/by-project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hours By Project */
+        get: operations["hours_by_project_api_dashboard_hours_by_project_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/hours/by-category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hours By Category */
+        get: operations["hours_by_category_api_dashboard_hours_by_category_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Task Counts
+         * @description Tasks completed within the range, plus tasks open and overdue right now.
+         */
+        get: operations["task_counts_api_dashboard_tasks_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1297,6 +1411,12 @@ export interface components {
             /** Team Id */
             team_id?: number | null;
         };
+        /** CategoryHours */
+        CategoryHours: {
+            category: components["schemas"]["LookupRef"];
+            /** Hours */
+            hours: number;
+        };
         /** CategoryOut */
         CategoryOut: {
             /** Id */
@@ -1345,6 +1465,16 @@ export interface components {
             /** Workday Hours */
             workday_hours: number;
         };
+        /** DayHours */
+        DayHours: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hours */
+            hours: number;
+        };
         /** ErrorBody */
         ErrorBody: {
             /**
@@ -1381,6 +1511,62 @@ export interface components {
              * @constant
              */
             database: "ok";
+        };
+        /** HoursByCategory */
+        HoursByCategory: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Items */
+            items: components["schemas"]["CategoryHours"][];
+            /** Total */
+            total: number;
+        };
+        /** HoursByProject */
+        HoursByProject: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Items */
+            items: components["schemas"]["ProjectHours"][];
+            /** Total */
+            total: number;
+        };
+        /** HoursPerDay */
+        HoursPerDay: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Days */
+            days: components["schemas"]["DayHours"][];
+            /** Total */
+            total: number;
+        };
+        /** HoursPerWeek */
+        HoursPerWeek: {
+            /** Weeks */
+            weeks: components["schemas"]["WeekHours"][];
         };
         /** InviteAcceptIn */
         InviteAcceptIn: {
@@ -1989,6 +2175,12 @@ export interface components {
              */
             description: string;
         };
+        /** ProjectHours */
+        ProjectHours: {
+            project: components["schemas"]["ProjectRef"] | null;
+            /** Hours */
+            hours: number;
+        };
         /** ProjectOut */
         ProjectOut: {
             /** Id */
@@ -2195,6 +2387,25 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["StepSync"][];
         };
+        /** TaskCounts */
+        TaskCounts: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Completed */
+            completed: number;
+            /** Open */
+            open: number;
+            /** Overdue */
+            overdue: number;
+        };
         /**
          * TaskCreate
          * @description Omitted status/priority get the default value.
@@ -2338,6 +2549,16 @@ export interface components {
             id: number;
             /** Username */
             username: string;
+        };
+        /** WeekHours */
+        WeekHours: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Hours */
+            hours: number;
         };
     };
     responses: never;
@@ -4919,6 +5140,48 @@ export interface operations {
             };
         };
     };
+    list_runs_api_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: components["schemas"]["RunStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_RunOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_run_api_runs__run_id__get: {
         parameters: {
             query?: never;
@@ -5068,6 +5331,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_TeamMemberOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    hours_per_day_api_dashboard_hours_daily_get: {
+        parameters: {
+            query?: {
+                week?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursPerDay"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    hours_per_week_api_dashboard_hours_weekly_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursPerWeek"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    hours_by_project_api_dashboard_hours_by_project_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursByProject"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    hours_by_category_api_dashboard_hours_by_category_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursByCategory"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    task_counts_api_dashboard_tasks_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCounts"];
                 };
             };
             /** @description Client error */

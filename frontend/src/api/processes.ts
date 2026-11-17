@@ -30,6 +30,7 @@ export const processKeys = {
 export const runKeys = {
   all: ['runs'] as const,
   detail: (id: number) => ['runs', id] as const,
+  list: (status: RunStatus | null) => ['runs', 'list', status] as const,
 }
 
 export function useProcesses(isActive: boolean, offset: number) {
@@ -146,5 +147,18 @@ export function useCancelRun() {
   return useMutation({
     mutationFn: (id: number) => api.post<RunDetail>(`/runs/${id}/cancel`),
     onSuccess: invalidate,
+  })
+}
+
+export const ACTIVE_RUNS_LIMIT = 20
+
+/** The caller's runs in progress, across all processes (dashboard widget). */
+export function useActiveRuns() {
+  return useQuery({
+    queryKey: runKeys.list('in_progress'),
+    queryFn: () =>
+      api.get<Schemas['Page_RunOut_']>('/runs', {
+        query: { status: 'in_progress', limit: ACTIVE_RUNS_LIMIT },
+      }),
   })
 }

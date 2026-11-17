@@ -76,7 +76,12 @@ export function useTeamMembers(teamId: number | undefined) {
 
 function useInvalidateLogs() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: logKeys.all })
+  // The dashboard's hour charts are computed from logs.
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: logKeys.all }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    ])
 }
 
 export function useCreateLog() {

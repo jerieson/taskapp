@@ -6,6 +6,7 @@ from app.api.routers import (
     admin_users,
     auth,
     daily_plans,
+    dashboard,
     health,
     invites,
     lookups,
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
         processes,
         process_runs,
         teams,
+        dashboard,
     ):
         app.include_router(module.router, prefix="/api")
     for router in (lookups.categories, lookups.statuses, lookups.priorities):

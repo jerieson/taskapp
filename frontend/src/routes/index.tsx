@@ -7,6 +7,7 @@ import { ADMIN_ROLES, TEAM_ROLES } from './nav'
 import NotFoundPage from './NotFoundPage'
 import {
   AdminPage,
+  DashboardPage,
   InvitePage,
   LoginPage,
   LogsPage,
@@ -68,7 +69,7 @@ export const router = createBrowserRouter([
               { path: 'processes', element: <ProcessesPage /> },
               { path: 'processes/:id', element: <ProcessPage /> },
               { path: 'runs/:id', element: <RunPage /> },
-              { path: 'dashboard', element: <PlaceholderPage title="Dashboard" /> },
+              { path: 'dashboard', element: <DashboardPage /> },
               { path: 'profile', element: <ProfilePage /> },
               {
                 path: 'team/logs',
