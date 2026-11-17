@@ -1,6 +1,6 @@
 /*
- * The current user's personal dashboard. Every number is the caller's own and is
- * computed on the server. Log and task mutations invalidate `dashboardKeys.all`.
+ * Dashboards: the current user's own numbers, and team dashboards below. Everything
+ * is computed on the server. Log and task mutations invalidate `dashboardKeys.all`.
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
@@ -67,6 +67,84 @@ export function useTaskCounts(range: DateRange) {
   return useQuery({
     queryKey: dashboardKeys.tasks(range),
     queryFn: () => api.get<TaskCounts>('/dashboard/tasks', { query: rangeQuery(range) }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+// ------------------------------------------------------------------ team dashboard
+// Managers: their own team; admins: any team. Keys sit under `dashboardKeys.all`, so
+// log and task mutations refresh them too.
+
+export type TeamHoursPerDay = Schemas['TeamHoursPerDay']
+export type TeamHoursPerWeek = Schemas['TeamHoursPerWeek']
+export type HoursByMember = Schemas['HoursByMember']
+export type TeamTaskCounts = Schemas['TeamTaskCounts']
+export type DashboardMember = Schemas['TeamMemberOut']
+
+export const teamDashboardKeys = {
+  all: (teamId: number) => ['dashboard', 'team', teamId] as const,
+  daily: (teamId: number, week: string) => ['dashboard', 'team', teamId, 'daily', week] as const,
+  weekly: (teamId: number) => ['dashboard', 'team', teamId, 'weekly'] as const,
+  byMember: (teamId: number, r: DateRange) =>
+    ['dashboard', 'team', teamId, 'by-member', r.from, r.to] as const,
+  byProject: (teamId: number, r: DateRange) =>
+    ['dashboard', 'team', teamId, 'by-project', r.from, r.to] as const,
+  byCategory: (teamId: number, r: DateRange) =>
+    ['dashboard', 'team', teamId, 'by-category', r.from, r.to] as const,
+  tasks: (teamId: number, r: DateRange) =>
+    ['dashboard', 'team', teamId, 'tasks', r.from, r.to] as const,
+}
+
+const teamPath = (teamId: number, path: string) => `/teams/${teamId}/dashboard/${path}`
+
+export function useTeamHoursPerDay(teamId: number, week: string) {
+  return useQuery({
+    queryKey: teamDashboardKeys.daily(teamId, week),
+    queryFn: () => api.get<TeamHoursPerDay>(teamPath(teamId, 'hours/daily'), { query: { week } }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useTeamHoursPerWeek(teamId: number) {
+  return useQuery({
+    queryKey: teamDashboardKeys.weekly(teamId),
+    queryFn: () => api.get<TeamHoursPerWeek>(teamPath(teamId, 'hours/weekly')),
+  })
+}
+
+export function useTeamHoursByMember(teamId: number, range: DateRange) {
+  return useQuery({
+    queryKey: teamDashboardKeys.byMember(teamId, range),
+    queryFn: () =>
+      api.get<HoursByMember>(teamPath(teamId, 'hours/by-member'), { query: rangeQuery(range) }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useTeamHoursByProject(teamId: number, range: DateRange) {
+  return useQuery({
+    queryKey: teamDashboardKeys.byProject(teamId, range),
+    queryFn: () =>
+      api.get<HoursByProject>(teamPath(teamId, 'hours/by-project'), { query: rangeQuery(range) }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useTeamHoursByCategory(teamId: number, range: DateRange) {
+  return useQuery({
+    queryKey: teamDashboardKeys.byCategory(teamId, range),
+    queryFn: () =>
+      api.get<HoursByCategory>(teamPath(teamId, 'hours/by-category'), {
+        query: rangeQuery(range),
+      }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useTeamTaskCounts(teamId: number, range: DateRange) {
+  return useQuery({
+    queryKey: teamDashboardKeys.tasks(teamId, range),
+    queryFn: () => api.get<TeamTaskCounts>(teamPath(teamId, 'tasks'), { query: rangeQuery(range) }),
     placeholderData: keepPreviousData,
   })
 }

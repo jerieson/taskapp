@@ -197,11 +197,11 @@ async def list_logs(db: AsyncSession, user: User, params: ProdLogQuery) -> Page[
     return await _page(db, stmt, params, user)
 
 
-async def _check_team_access(db: AsyncSession, user: User, team_id: int) -> None:
+async def check_team_access(db: AsyncSession, user: User, team_id: int) -> None:
     """Admins: any existing team. Managers: their own team only (404 for others).
     Devs: no team access at all."""
     if user.role == Role.DEV:
-        raise AppError(403, "forbidden", "Only managers and admins can view team logs")
+        raise AppError(403, "forbidden", "Only managers and admins can view team data")
     if user.role == Role.MANAGER and user.team_id != team_id:
         raise AppError(404, "not_found", "Team not found")
     if await db.get(Team, team_id) is None:
@@ -212,7 +212,7 @@ async def list_team_logs(
     db: AsyncSession, user: User, team_id: int, params: TeamLogQuery
 ) -> Page[ProdLogListItem]:
     """Logs whose team snapshot is `team_id`, whatever team the author is in now."""
-    await _check_team_access(db, user, team_id)
+    await check_team_access(db, user, team_id)
     stmt = _filter(_base_query().where(ProdLog.team_id == team_id), params)
     if params.user_id is not None:
         stmt = stmt.where(ProdLog.user_id == params.user_id)
@@ -223,7 +223,7 @@ async def list_team_members(
     db: AsyncSession, user: User, team_id: int, params: PaginationParams
 ) -> Page[TeamMemberOut]:
     """Current members plus former members who have logs under this team."""
-    await _check_team_access(db, user, team_id)
+    await check_team_access(db, user, team_id)
     former = select(ProdLog.user_id).where(ProdLog.team_id == team_id)
     stmt = select(User).where((User.team_id == team_id) | User.id.in_(former))
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0

@@ -3,9 +3,6 @@
  * week (last 8 weeks); hours by project and category plus task counts for a shared
  * date range (`?range=` / `?from=&to=`); process runs in progress.
  */
-import type { ReactNode } from 'react'
-import { useSearchParams } from 'react-router'
-
 import {
   useHoursByCategory,
   useHoursByProject,
@@ -15,84 +12,16 @@ import {
 } from '../../api/dashboard'
 import AsyncState from '../../components/AsyncState'
 import DateRangePicker from '../../components/DateRangePicker'
-import EmptyState from '../../components/EmptyState'
-import { ChartIcon, ChevronLeftIcon, ChevronRightIcon } from '../../components/icons'
 import PageHeader from '../../components/PageHeader'
 import { SkeletonChart, SkeletonStat } from '../../components/Skeleton'
-import { useDateRangeParam } from '../../lib/dateRange'
-import { formatDayRange, formatHours, mondayOf, shiftDay, todayIso } from '../../lib/format'
+import { useDateRangeParam, useWeekParam } from '../../lib/dateRange'
+import { formatHours } from '../../lib/format'
 import ActiveRuns from './ActiveRuns'
-import { ChartCard } from './ChartParts'
+import { ChartCard, NoHours, SectionTitle, WeekNav } from './ChartParts'
 import HoursBarChart from './HoursBarChart'
 import HoursPerDayChart from './HoursPerDayChart'
 import HoursPerWeekChart from './HoursPerWeekChart'
 import TaskStats from './TaskStats'
-
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-
-function useWeekParam(): [string, (monday: string) => void] {
-  const [params, setParams] = useSearchParams()
-  const raw = params.get('week')
-  const current = mondayOf(todayIso())
-  const week = raw && DATE_PATTERN.test(raw) ? mondayOf(raw) : current
-  const setWeek = (monday: string) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (monday === current) next.delete('week')
-        else next.set('week', monday)
-        return next
-      },
-      { replace: true },
-    )
-  return [week, setWeek]
-}
-
-function SectionTitle({ id, children }: { id: string; children: ReactNode }) {
-  return (
-    <h2 id={id} className="text-lg font-semibold">
-      {children}
-    </h2>
-  )
-}
-
-function noHours(title: string) {
-  return <EmptyState size="compact" icon={<ChartIcon />} title={title} />
-}
-
-function WeekNav({ week, onChange }: { week: string; onChange: (monday: string) => void }) {
-  const current = mondayOf(todayIso())
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="join">
-        <button
-          type="button"
-          className="btn join-item btn-square btn-sm"
-          onClick={() => onChange(shiftDay(week, -7))}
-          aria-label="Previous week"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <button
-          type="button"
-          className="btn join-item btn-square btn-sm"
-          onClick={() => onChange(shiftDay(week, 7))}
-          aria-label="Next week"
-        >
-          <ChevronRightIcon />
-        </button>
-      </div>
-      <span className="text-sm" aria-live="polite">
-        {formatDayRange(week, shiftDay(week, 6))}
-      </span>
-      {week !== current && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(current)}>
-          This week
-        </button>
-      )}
-    </div>
-  )
-}
 
 export default function DashboardPage() {
   const [week, setWeek] = useWeekParam()
@@ -122,7 +51,7 @@ export default function DashboardPage() {
                 query={daily}
                 isEmpty={daily.data?.total === 0}
                 skeleton={<div className="skeleton h-56 w-full" />}
-                empty={noHours('No hours logged this week')}
+                empty={<NoHours title="No hours logged this week" />}
               >
                 {() => <HoursPerDayChart data={daily.data!} />}
               </AsyncState>
@@ -132,7 +61,7 @@ export default function DashboardPage() {
                 query={weekly}
                 isEmpty={weekly.data?.weeks.every((w) => w.hours === 0)}
                 skeleton={<div className="skeleton h-56 w-full" />}
-                empty={noHours('No hours logged in the last 8 weeks')}
+                empty={<NoHours title="No hours logged in the last 8 weeks" />}
               >
                 {() => <HoursPerWeekChart data={weekly.data!} />}
               </AsyncState>
@@ -167,7 +96,7 @@ export default function DashboardPage() {
                   aside={`Total ${formatHours(byProject.data!.total)}`}
                 >
                   {byProject.data!.items.length === 0 ? (
-                    noHours('No hours in this range')
+                    <NoHours title="No hours in this range" />
                   ) : (
                     <HoursBarChart
                       caption="Hours by project"
@@ -189,7 +118,7 @@ export default function DashboardPage() {
                   aside={`Total ${formatHours(byCategory.data!.total)}`}
                 >
                   {byCategory.data!.items.length === 0 ? (
-                    noHours('No hours in this range')
+                    <NoHours title="No hours in this range" />
                   ) : (
                     <HoursBarChart
                       caption="Hours by category"

@@ -31,6 +31,7 @@ import Pagination from '../../components/Pagination'
 import { SkeletonForm } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
 import { formatDay, formatHours } from '../../lib/format'
+import { memberNote } from '../../lib/labels'
 import LogFormBody from './LogForm'
 import LogList, { LogListSkeleton } from './LogList'
 
@@ -57,11 +58,8 @@ function toTeamFilters(f: FilterState): TeamLogFilters {
 }
 
 function memberLabel(member: TeamMember): string {
-  const notes = [
-    !member.is_current_member && 'former member',
-    !member.is_active && 'deactivated',
-  ].filter(Boolean)
-  return notes.length ? `${member.username} (${notes.join(', ')})` : member.username
+  const note = memberNote(member)
+  return note ? `${member.username} (${note})` : member.username
 }
 
 function Filters({

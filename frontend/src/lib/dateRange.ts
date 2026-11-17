@@ -1,7 +1,8 @@
 /*
  * Date range presets for dashboards, kept in the URL so a view can be reloaded or
  * shared: `?range=last-30`, or `?from=YYYY-MM-DD&to=YYYY-MM-DD` for a custom range.
- * Other search params (e.g. `week`) are left untouched.
+ * Other search params (e.g. `week`) are left untouched. `useWeekParam` keeps the week
+ * shown by the hours-per-day charts in `?week=`.
  */
 import { useSearchParams } from 'react-router'
 
@@ -100,4 +101,23 @@ export function useDateRangeParam(
         p.set('to', next.to < next.from ? next.from : next.to)
       }),
   }
+}
+
+/** `?week=` as that week's Monday (absent: the current week, which is not stored). */
+export function useWeekParam(): [string, (monday: string) => void] {
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('week')
+  const current = mondayOf(todayIso())
+  const week = raw && DATE_PATTERN.test(raw) ? mondayOf(raw) : current
+  const setWeek = (monday: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (monday === current) next.delete('week')
+        else next.set('week', monday)
+        return next
+      },
+      { replace: true },
+    )
+  return [week, setWeek]
 }

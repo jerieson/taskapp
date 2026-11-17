@@ -16,6 +16,7 @@ export const ResetPasswordPage = lazy(() => import('../features/auth/ResetPasswo
 export const RunPage = lazy(() => import('../features/processes/RunPage'))
 export const TasksPage = lazy(() => import('../features/tasks/TasksPage'))
 export const TodayPage = lazy(() => import('../features/daily-plan/TodayPage'))
+export const TeamDashboardPage = lazy(() => import('../features/dashboard/TeamDashboardPage'))
 export const TeamLogsPage = lazy(() => import('../features/logs/TeamLogsPage'))
 
 export function PublicPage({ children }: { children: ReactNode }) {

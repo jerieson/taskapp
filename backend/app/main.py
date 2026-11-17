@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI
 
 from app.api.routers import (
     admin_invites,
+    admin_overview,
     admin_teams,
     admin_users,
     auth,
@@ -16,6 +17,7 @@ from app.api.routers import (
     prod_logs,
     projects,
     tasks,
+    team_dashboard,
     teams,
 )
 from app.core.config import get_settings
@@ -60,6 +62,7 @@ def create_app() -> FastAPI:
         admin_teams,
         admin_users,
         admin_invites,
+        admin_overview,
         projects,
         tasks,
         prod_logs,
@@ -67,6 +70,7 @@ def create_app() -> FastAPI:
         processes,
         process_runs,
         teams,
+        team_dashboard,
         dashboard,
     ):
         app.include_router(module.router, prefix="/api")

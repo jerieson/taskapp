@@ -61,7 +61,7 @@ def _created(invite: Invite, token: str, settings: Settings) -> InviteCreated:
     )
 
 
-def _is_pending() -> ColumnElement[bool]:
+def is_pending() -> ColumnElement[bool]:
     return and_(Invite.accepted_at.is_(None), Invite.expires_at > utcnow())
 
 
@@ -72,7 +72,7 @@ async def email_has_user(db: AsyncSession, email: str) -> bool:
 async def find_pending_invite_by_email(db: AsyncSession, email: str) -> Invite | None:
     return await db.scalar(
         select(Invite)
-        .where(func.lower(Invite.email) == email.lower(), _is_pending())
+        .where(func.lower(Invite.email) == email.lower(), is_pending())
         .order_by(Invite.created_at.desc())
         .limit(1)
         .with_for_update()
@@ -84,9 +84,7 @@ async def find_pending_invite_by_token(db: AsyncSession, token: str | None) -> I
     if not token:
         return None
     return await db.scalar(
-        select(Invite)
-        .where(Invite.token_hash == hash_token(token), _is_pending())
-        .with_for_update()
+        select(Invite).where(Invite.token_hash == hash_token(token), is_pending()).with_for_update()
     )
 
 
@@ -168,7 +166,7 @@ async def get_public_invite(db: AsyncSession, token: str) -> InvitePublicOut:
         await db.execute(
             select(Invite, Team.name)
             .join(Team, Team.id == Invite.team_id)
-            .where(Invite.token_hash == hash_token(token), _is_pending())
+            .where(Invite.token_hash == hash_token(token), is_pending())
         )
     ).one_or_none()
     if row is None:

@@ -8,6 +8,8 @@ export type Invite = Schemas['InviteOut']
 export type InviteCreated = Schemas['InviteCreated']
 export type InviteStatus = Schemas['InviteStatus']
 export type PasswordResetCreated = Schemas['PasswordResetCreated']
+export type AdminOverview = Schemas['AdminOverview']
+export type AIUsageRow = Schemas['AIUsageRow']
 
 export interface UserFilters {
   team_id?: number
@@ -29,6 +31,30 @@ export const adminKeys = {
     ['admin', 'users', 'page', filters, offset] as const,
   invites: ['admin', 'invites'] as const,
   invitePage: (offset: number) => ['admin', 'invites', 'page', offset] as const,
+  // Under `all`, so team, user and invite changes refresh the counts.
+  overview: ['admin', 'overview'] as const,
+  aiUsage: (offset: number) => ['admin', 'ai-usage', offset] as const,
+}
+
+// ------------------------------------------------------------------ overview
+
+export function useAdminOverview() {
+  return useQuery({
+    queryKey: adminKeys.overview,
+    queryFn: () => api.get<AdminOverview>('/admin/overview'),
+  })
+}
+
+/** AI requests per user over the last 30 days. */
+export function useAIUsage(offset: number) {
+  return useQuery({
+    queryKey: adminKeys.aiUsage(offset),
+    queryFn: () =>
+      api.get<Schemas['Page_AIUsageRow_']>('/admin/ai-usage', {
+        query: { limit: PAGE_SIZE, offset },
+      }),
+    placeholderData: keepPreviousData,
+  })
 }
 
 // ------------------------------------------------------------------ teams

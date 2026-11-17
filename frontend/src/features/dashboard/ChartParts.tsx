@@ -1,8 +1,60 @@
 /*
- * Building blocks shared by the dashboard charts: the card frame, the hover tooltip,
- * and a screen-reader table with the same numbers as the chart.
+ * Building blocks shared by the dashboards: section titles, the card frame, week
+ * navigation, the hover tooltip, empty states, and a screen-reader table with the
+ * same numbers as the chart.
  */
 import type { ReactNode } from 'react'
+
+import EmptyState from '../../components/EmptyState'
+import { ChartIcon, ChevronLeftIcon, ChevronRightIcon } from '../../components/icons'
+import { formatDayRange, mondayOf, shiftDay, todayIso } from '../../lib/format'
+
+export function SectionTitle({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <h2 id={id} className="text-lg font-semibold">
+      {children}
+    </h2>
+  )
+}
+
+export function NoHours({ title }: { title: string }) {
+  return <EmptyState size="compact" icon={<ChartIcon />} title={title} />
+}
+
+/** Previous / next week buttons; `week` is a Monday. */
+export function WeekNav({ week, onChange }: { week: string; onChange: (monday: string) => void }) {
+  const current = mondayOf(todayIso())
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="join">
+        <button
+          type="button"
+          className="btn join-item btn-square btn-sm"
+          onClick={() => onChange(shiftDay(week, -7))}
+          aria-label="Previous week"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          className="btn join-item btn-square btn-sm"
+          onClick={() => onChange(shiftDay(week, 7))}
+          aria-label="Next week"
+        >
+          <ChevronRightIcon />
+        </button>
+      </div>
+      <span className="text-sm" aria-live="polite">
+        {formatDayRange(week, shiftDay(week, 6))}
+      </span>
+      {week !== current && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(current)}>
+          This week
+        </button>
+      )}
+    </div>
+  )
+}
 
 interface ChartCardProps {
   title: string

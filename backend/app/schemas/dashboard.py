@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.schemas.prod_logs import HoursOut
+from app.schemas.prod_logs import HoursOut, TeamMemberOut
 from app.schemas.tasks import LookupRef, ProjectRef
 
 WEEKS_IN_TREND = 8
@@ -103,3 +103,67 @@ class TaskCounts(BaseModel):
     """Tasks open now (status not done), whatever the range."""
     overdue: int
     """Open tasks whose due date is before today."""
+
+
+# ---------------------------------------------------------------- team dashboard
+#
+# Team numbers come from the team snapshot on each prod log (`prod_logs.team_id`), so
+# hours stay with the team they were logged in after the author changes teams.
+# "Members" are the team's active current members plus anyone (former members,
+# deactivated users) with hours in the period. Task data is counts only.
+
+
+class MemberDays(BaseModel):
+    member: TeamMemberOut
+    days: list[DayHours]
+    """All seven days, Monday first."""
+    total: HoursOut
+
+
+class TeamHoursPerDay(HoursPerDay):
+    members: list[MemberDays]
+    """Ordered by username."""
+
+
+class MemberWeeks(BaseModel):
+    member: TeamMemberOut
+    weeks: list[WeekHours]
+    """The same 8 weeks as the team series, oldest first."""
+    total: HoursOut
+
+
+class TeamHoursPerWeek(HoursPerWeek):
+    members: list[MemberWeeks]
+    """Ordered by username."""
+
+
+class MemberHours(BaseModel):
+    member: TeamMemberOut
+    hours: HoursOut
+
+
+class HoursByMember(BaseModel):
+    date_from: date
+    date_to: date
+    items: list[MemberHours]
+    """Most hours first, then by username; members without hours have 0."""
+    total: HoursOut
+
+
+class MemberTaskCounts(BaseModel):
+    member: TeamMemberOut
+    completed: int
+    """Tasks completed within the range (and still done)."""
+    open: int
+    """Tasks open now, whatever the range."""
+    overdue: int
+    """Open tasks whose due date is before today."""
+
+
+class TeamTaskCounts(BaseModel):
+    """Counts only: team views never include task titles or descriptions."""
+
+    date_from: date
+    date_to: date
+    items: list[MemberTaskCounts]
+    """One row per current team member (active ones), ordered by username."""

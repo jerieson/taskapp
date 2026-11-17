@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 
-import PlaceholderPage from '../components/PlaceholderPage'
 import AppLayout from '../layouts/AppLayout'
 import { RedirectIfAuthenticated, RequireAuth, RequireRole } from './guards'
 import { ADMIN_ROLES, TEAM_ROLES } from './nav'
@@ -18,6 +17,7 @@ import {
   ResetPasswordPage,
   RunPage,
   TasksPage,
+  TeamDashboardPage,
   TeamLogsPage,
   TodayPage,
 } from './pages'
@@ -83,7 +83,7 @@ export const router = createBrowserRouter([
                 path: 'team/dashboard',
                 element: (
                   <RequireRole roles={TEAM_ROLES}>
-                    <PlaceholderPage title="Team dashboard" />
+                    <TeamDashboardPage />
                   </RequireRole>
                 ),
               },
