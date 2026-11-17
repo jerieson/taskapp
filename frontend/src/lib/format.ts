@@ -13,3 +13,9 @@ export function formatDate(iso: string): string {
 export function formatDateTime(iso: string): string {
   return dateTimeFormat.format(new Date(iso))
 }
+
+/** A calendar date from the API ("2026-11-17", no time), shown without time zone shifts. */
+export function formatDay(isoDate: string): string {
+  const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number)
+  return dateFormat.format(new Date(year, month - 1, day))
+}

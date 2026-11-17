@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends
 from pydantic import SecretStr, field_validator
@@ -30,6 +31,22 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: SecretStr = SecretStr("")
     google_redirect_uri: str = "http://localhost:5173/api/auth/google/callback"
+
+    # Dates ("today", overdue, dashboard weeks) are computed in this time zone.
+    app_timezone: str = "UTC"
+
+    @field_validator("app_timezone")
+    @classmethod
+    def _valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(f"Unknown APP_TIMEZONE {value!r}") from exc
+        return value
+
+    @property
+    def tz(self) -> ZoneInfo:
+        return ZoneInfo(self.app_timezone)
 
     @field_validator("frontend_url")
     @classmethod

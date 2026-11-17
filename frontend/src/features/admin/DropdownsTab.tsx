@@ -355,6 +355,8 @@ function LookupList({ list }: { list: ListMeta }) {
           {supportsDefault
             ? `New tasks get the default ${list.singular}. Inactive values stay on existing records.`
             : 'Inactive values are hidden from selection but stay on existing records.'}
+          {list.kind === 'priorities' &&
+            ' Order them from lowest to highest: sorting tasks by priority uses this order.'}
         </p>
         <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
           <PlusIcon />

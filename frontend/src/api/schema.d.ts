@@ -485,6 +485,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tasks */
+        get: operations["list_tasks_api_tasks_get"];
+        put?: never;
+        /**
+         * Create Task
+         * @description Omitted status/priority get the default; only active values are accepted.
+         */
+        post: operations["create_task_api_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task */
+        get: operations["get_task_api_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Task */
+        delete: operations["delete_task_api_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Task
+         * @description Partial update. Changing status sets or clears `completed_at`.
+         */
+        patch: operations["update_task_api_tasks__task_id__patch"];
+        trace?: never;
+    };
     "/api/categories": {
         parameters: {
             query?: never;
@@ -1007,6 +1050,20 @@ export interface components {
             color?: string | null;
         };
         /**
+         * LookupRef
+         * @description A category or priority as embedded in a record (it may be inactive by now).
+         */
+        LookupRef: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Color */
+            color: string | null;
+            /** Is Active */
+            is_active: boolean;
+        };
+        /**
          * LookupUpdate
          * @description Omitted fields keep their value. Send `"color": null` to clear the color.
          */
@@ -1102,6 +1159,17 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** Page[TaskOut] */
+        Page_TaskOut_: {
+            /** Items */
+            items: components["schemas"]["TaskOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** Page[TeamOut] */
         Page_TeamOut_: {
             /** Items */
@@ -1178,6 +1246,15 @@ export interface components {
              */
             created_at: string;
         };
+        /** ProjectRef */
+        ProjectRef: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Is Active */
+            is_active: boolean;
+        };
         /**
          * ProjectUpdate
          * @description Omitted fields keep their value.
@@ -1230,6 +1307,19 @@ export interface components {
             /** Is Done */
             is_done: boolean;
         };
+        /** StatusRef */
+        StatusRef: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Color */
+            color: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Done */
+            is_done: boolean;
+        };
         /** StatusUpdate */
         StatusUpdate: {
             /** Label */
@@ -1238,6 +1328,95 @@ export interface components {
             color?: string | null;
             /** Is Done */
             is_done?: boolean | null;
+        };
+        /**
+         * TaskCreate
+         * @description Omitted status/priority get the default value.
+         */
+        TaskCreate: {
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Category Id */
+            category_id?: number | null;
+            /** Status Id */
+            status_id?: number | null;
+            /** Priority Id */
+            priority_id?: number | null;
+            /** Due Date */
+            due_date?: string | null;
+        };
+        /** TaskOut */
+        TaskOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            project: components["schemas"]["ProjectRef"] | null;
+            category: components["schemas"]["LookupRef"] | null;
+            status: components["schemas"]["StatusRef"];
+            priority: components["schemas"]["LookupRef"];
+            /** Due Date */
+            due_date: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /** Is Overdue */
+            is_overdue: boolean;
+            /** Process Run Id */
+            process_run_id: number | null;
+            /** Process Step Id */
+            process_step_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * TaskSort
+         * @description `priority` = highest first, `-priority` = lowest first.
+         *
+         *     Priorities are ranked by the admin's dropdown order, lowest first: the last value
+         *     in the list is the highest priority.
+         * @enum {string}
+         */
+        TaskSort: "due_date" | "-due_date" | "priority" | "-priority" | "created_at" | "-created_at";
+        /**
+         * TaskState
+         * @enum {string}
+         */
+        TaskState: "open" | "completed";
+        /**
+         * TaskUpdate
+         * @description Omitted fields keep their value. Send null to clear an optional field.
+         *
+         *     A value that has been deactivated may be kept (sent unchanged) but not newly chosen.
+         */
+        TaskUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Category Id */
+            category_id?: number | null;
+            /** Status Id */
+            status_id?: number | null;
+            /** Priority Id */
+            priority_id?: number | null;
+            /** Due Date */
+            due_date?: string | null;
         };
         /** TeamIn */
         TeamIn: {
@@ -2470,6 +2649,221 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_tasks_api_tasks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status_id?: number | null;
+                priority_id?: number | null;
+                project_id?: number | null;
+                category_id?: number | null;
+                due_from?: string | null;
+                due_to?: string | null;
+                state?: components["schemas"]["TaskState"] | null;
+                process_run_id?: number | null;
+                in_process_run?: boolean | null;
+                sort?: components["schemas"]["TaskSort"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_TaskOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_task_api_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_task_api_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_task_api_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_task_api_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
                 };
             };
             /** @description Client error */

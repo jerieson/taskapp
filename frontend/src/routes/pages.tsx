@@ -9,6 +9,7 @@ export const InvitePage = lazy(() => import('../features/auth/InvitePage'))
 export const LoginPage = lazy(() => import('../features/auth/LoginPage'))
 export const ProfilePage = lazy(() => import('../features/auth/ProfilePage'))
 export const ResetPasswordPage = lazy(() => import('../features/auth/ResetPasswordPage'))
+export const TasksPage = lazy(() => import('../features/tasks/TasksPage'))
 
 export function PublicPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<FullPageSpinner />}>{children}</Suspense>
