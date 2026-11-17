@@ -1,5 +1,9 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 
+from app.ai.providers.factory import build_provider
 from app.api.routers import (
     admin_invites,
     admin_overview,
@@ -29,8 +33,16 @@ from app.core.rate_limit import LoginRateLimiter
 from app.schemas.errors import ErrorResponse
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    if app.state.llm_provider is not None:
+        await app.state.llm_provider.aclose()
+
+
 def create_app() -> FastAPI:
-    configure_logging(get_settings().log_level)
+    settings = get_settings()
+    configure_logging(settings.log_level)
 
     app = FastAPI(
         title="Taskapp API",
@@ -46,8 +58,11 @@ def create_app() -> FastAPI:
         },
         # Every non-GET request must carry the double-submit CSRF token.
         dependencies=[Depends(csrf_protect)],
+        lifespan=_lifespan,
     )
     app.state.login_limiter = LoginRateLimiter()
+    # None when LLM_PROVIDER is empty; raises AIConfigError on a broken AI config.
+    app.state.llm_provider = build_provider(settings)
 
     register_exception_handlers(app)
     app.add_middleware(RequestContextMiddleware)

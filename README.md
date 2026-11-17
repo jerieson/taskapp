@@ -120,6 +120,57 @@ Ask before adding anything not listed in CLAUDE.md.
 - Logs are JSON lines on stdout. Each request gets an `X-Request-ID` (returned in the response
   header and included in every log line for that request).
 
+## AI
+
+AI features are off until `LLM_PROVIDER` is set in `.env`. When it is set, the app refuses to
+start unless that provider has an adapter and `LLM_MODEL` and `LLM_API_KEY` are filled in.
+
+**Privacy:** using an AI feature sends the related log and task text to the configured LLM
+provider.
+
+| Variable | Meaning |
+|---|---|
+| `LLM_PROVIDER` | `openai`: OpenAI or any OpenAI-compatible endpoint. Empty disables AI. |
+| `LLM_BASE_URL` | Endpoint, e.g. `https://ollama.com/v1` or a gateway's `/v1`. Empty means OpenAI. |
+| `LLM_MODEL` | Model name the endpoint expects. |
+| `LLM_API_KEY` | API key for the endpoint. |
+| `LLM_TIMEOUT_SECONDS` | Per-request timeout (default 120). |
+| `AI_DAILY_LIMIT_PER_USER` | Provider calls per user per day (in `APP_TIMEZONE`); then HTTP 429. |
+
+Run `make ai-smoke` after changing these. It makes one real structured call and one text
+call and prints the validated result and token usage. Tests never call a real provider; they
+use `FakeProvider` (`backend/tests/ai_fakes.py`) and an httpx2 mock transport.
+
+How it fits together (`backend/app/ai/`):
+
+- `providers/base.py`: the `LLMProvider` protocol, `Usage`, and the two adapter errors:
+  `ProviderOutputError` (the answer did not validate; retried once) and `ProviderCallError`
+  (the call failed; not retried, because the SDK already retries transient errors).
+- `providers/openai_compat.py`: the one adapter. It uses Chat Completions with a strict
+  `json_schema` response format. The schema is also written into the system prompt, and the
+  reply is validated with Pydantic. If the endpoint rejects `json_schema`, the adapter falls
+  back to `json_object`.
+- `providers/factory.py`: picks the adapter from `LLM_PROVIDER` at startup.
+- `client.py`: `AIClient` (`AIClientDep` in routers) is the only thing features call. It
+  enforces the daily limit, retries a structured call once on a validation failure, writes
+  an `ai_requests` row for every provider call, and raises typed errors: `ai_disabled` (503),
+  `ai_daily_limit_exceeded` (429), `ai_invalid_output` (502), `ai_provider_error` (502).
+
+### Adding an LLM provider
+
+1. Add the vendor's official SDK to `backend/pyproject.toml` (ask first; see above).
+2. Create `backend/app/ai/providers/<vendor>.py` with a class that has `name` and `model`
+   attributes and implements `generate_structured`, `generate_text` and `aclose` from
+   `LLMProvider`. Use the vendor's native structured output or tool calling. Return the
+   validated Pydantic object. Raise `ProviderOutputError` (with the `Usage` consumed) when the
+   output is unusable, and `ProviderCallError` for API failures. Do not put vendor messages
+   in exception text, because they can echo the API key.
+3. Register a builder in `_BUILDERS` in `providers/factory.py`.
+4. Add mock-transport tests like the `test_adapter_*` tests in `backend/tests/test_ai.py`,
+   then run `make ai-smoke` against the real service.
+
+Vendor-specific code stays inside `providers/`; features and services only use `AIClient`.
+
 ## Authentication
 
 - **Sessions** are stored server-side (`sessions` table, only the token hash). The token

@@ -39,6 +39,21 @@ class Settings(BaseSettings):
     # Planned hours in a working day (daily plan total, AI plan trimming).
     workday_hours: Decimal = Field(Decimal(8), gt=0, le=24)
 
+    # AI. Empty LLM_PROVIDER = AI features disabled (they return 503). When it is set,
+    # the app refuses to start without a matching adapter, a model and an API key.
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_api_key: SecretStr = SecretStr("")
+    # OpenAI-compatible endpoint (gateway, Ollama, vLLM...). Empty = the vendor default.
+    llm_base_url: str = ""
+    llm_timeout_seconds: float = Field(120.0, gt=0)
+    ai_daily_limit_per_user: int = Field(50, ge=0)
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _normalise_provider(cls, value: str) -> str:
+        return value.strip().lower()
+
     @field_validator("app_timezone")
     @classmethod
     def _valid_timezone(cls, value: str) -> str:

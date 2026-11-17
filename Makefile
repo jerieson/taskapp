@@ -11,7 +11,7 @@ FRONTEND := $(COMPOSE) run --rm --build --no-deps frontend
 
 .DEFAULT_GOAL := help
 .PHONY: help dev down logs build test lint lint-backend lint-frontend format typecheck \
-        check migrate migration seed types lock psql
+        check migrate migration seed types lock psql ai-smoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -61,6 +61,9 @@ migration: .env ## Autogenerate a migration: make migration m="add foo to bar"
 
 seed: .env ## Run the idempotent seed script
 	$(BACKEND) python -m app.scripts.seed
+
+ai-smoke: .env ## One real LLM call with the configured provider (prints result + usage)
+	$(BACKEND_NODEPS) python -m app.scripts.ai_smoke
 
 types: .env ## Regenerate frontend TS types from the FastAPI OpenAPI schema
 	$(BACKEND_NODEPS) python -m app.scripts.export_openapi > frontend/.openapi.json
