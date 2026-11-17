@@ -58,9 +58,14 @@ export function useTaskOptions(openOnly = true) {
   })
 }
 
+/** Daily plans embed their tasks, so they are refreshed along with the task lists. */
 function useInvalidateTasks() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: taskKeys.all })
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+      queryClient.invalidateQueries({ queryKey: ['plans'] }),
+    ])
 }
 
 export function useCreateTask() {
@@ -84,11 +89,12 @@ export function useDeleteTask() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/tasks/${id}`),
-    // Logs linked to the task lose the link.
+    // Logs linked to the task lose the link; plans drop it.
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: taskKeys.all }),
         queryClient.invalidateQueries({ queryKey: ['logs'] }),
+        queryClient.invalidateQueries({ queryKey: ['plans'] }),
       ]),
   })
 }

@@ -1,9 +1,10 @@
+from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +35,9 @@ class Settings(BaseSettings):
 
     # Dates ("today", overdue, dashboard weeks) are computed in this time zone.
     app_timezone: str = "UTC"
+
+    # Planned hours in a working day (daily plan total, AI plan trimming).
+    workday_hours: Decimal = Field(Decimal(8), gt=0, le=24)
 
     @field_validator("app_timezone")
     @classmethod

@@ -15,6 +15,7 @@ import {
   ResetPasswordPage,
   TasksPage,
   TeamLogsPage,
+  TodayPage,
 } from './pages'
 import RouteErrorPage from './RouteErrorPage'
 
@@ -58,7 +59,7 @@ export const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { index: true, element: <Navigate to="/today" replace /> },
-              { path: 'today', element: <PlaceholderPage title="Today" /> },
+              { path: 'today', element: <TodayPage /> },
               { path: 'tasks', element: <TasksPage /> },
               { path: 'logs', element: <LogsPage /> },
               { path: 'processes', element: <PlaceholderPage title="Processes" /> },

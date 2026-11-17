@@ -5,6 +5,7 @@ from app.api.routers import (
     admin_teams,
     admin_users,
     auth,
+    daily_plans,
     health,
     invites,
     lookups,
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
         projects,
         tasks,
         prod_logs,
+        daily_plans,
         teams,
     ):
         app.include_router(module.router, prefix="/api")

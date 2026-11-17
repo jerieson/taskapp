@@ -2,6 +2,7 @@
  * Create / edit form for a prod log, rendered inside a Modal.
  *
  * Choosing a task pre-fills the project and category from it (both stay editable).
+ * A new log can also start from a task (`prefill`, e.g. "Log work" on the daily plan).
  * Only the author can link a task: tasks are private, so an admin editing someone
  * else's log keeps the existing link and does not see the task list.
  */
@@ -54,10 +55,45 @@ interface LogFormProps {
   log: ProdLog | null
   /** False when an admin edits someone else's log. */
   isOwn: boolean
+  /** New log only: start from this task, date and hours. */
+  prefill?: LogPrefill
   onDone: () => void
 }
 
-export default function LogFormBody({ log, isOwn, onDone }: LogFormProps) {
+export interface LogPrefill {
+  task: Task
+  logDate: string
+  hours?: number | null
+}
+
+function defaultValues(log: ProdLog | null, prefill?: LogPrefill): LogForm {
+  if (log) {
+    return {
+      log_date: log.log_date,
+      title: log.title,
+      hours_spent: String(log.hours_spent),
+      task_id: log.task_id ? String(log.task_id) : '',
+      project_id: log.project ? String(log.project.id) : '',
+      category_id: String(log.category.id),
+      description: log.description ?? '',
+    }
+  }
+  const task = prefill?.task
+  // Only active values can be chosen on a new log.
+  const project = task?.project?.is_active ? String(task.project.id) : ''
+  const category = task?.category?.is_active ? String(task.category.id) : ''
+  return {
+    log_date: prefill?.logDate ?? todayIso(),
+    title: task?.title ?? '',
+    hours_spent: prefill?.hours ? String(prefill.hours) : '',
+    task_id: task ? String(task.id) : '',
+    project_id: project,
+    category_id: category,
+    description: '',
+  }
+}
+
+export default function LogFormBody({ log, isOwn, prefill, onDone }: LogFormProps) {
   const toast = useToast()
   const create = useCreateLog()
   const update = useUpdateLog()
@@ -70,15 +106,7 @@ export default function LogFormBody({ log, isOwn, onDone }: LogFormProps) {
     formState: { errors },
   } = useForm<LogForm>({
     resolver: zodResolver(logSchema),
-    defaultValues: {
-      log_date: log?.log_date ?? todayIso(),
-      title: log?.title ?? '',
-      hours_spent: log ? String(log.hours_spent) : '',
-      task_id: log?.task_id ? String(log.task_id) : '',
-      project_id: log?.project ? String(log.project.id) : '',
-      category_id: log ? String(log.category.id) : '',
-      description: log?.description ?? '',
-    },
+    defaultValues: defaultValues(log, prefill),
   })
 
   /** Copy the task's project and category (active ones only: others can't be chosen). */
@@ -139,7 +167,7 @@ export default function LogFormBody({ log, isOwn, onDone }: LogFormProps) {
       </div>
       <InputField
         label="Title"
-        autoFocus={!log}
+        autoFocus={!log && !prefill}
         autoComplete="off"
         error={errors.title?.message}
         {...register('title')}
@@ -147,7 +175,9 @@ export default function LogFormBody({ log, isOwn, onDone }: LogFormProps) {
       {isOwn ? (
         <TaskSelect
           label="Task (optional)"
-          current={log?.task ?? null}
+          current={
+            log?.task ?? (prefill ? { id: prefill.task.id, title: prefill.task.title } : null)
+          }
           error={errors.task_id?.message}
           {...register('task_id')}
           onTaskChosen={prefillFrom}

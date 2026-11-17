@@ -37,7 +37,7 @@ logger = logging.getLogger("app.tasks")
 _TaskRow = tuple[Task, Status, Priority, Category | None, Project | None]
 
 
-def _base_query() -> Select[_TaskRow]:
+def task_query() -> Select[_TaskRow]:
     return (
         select(Task, Status, Priority, Category, Project)
         .join(Status, Status.id == Task.status_id)
@@ -47,7 +47,7 @@ def _base_query() -> Select[_TaskRow]:
     )
 
 
-def _out(row: Row[_TaskRow], today: date) -> TaskOut:
+def task_out(row: Row[_TaskRow], today: date) -> TaskOut:
     task, status, priority, category, project = row
     return TaskOut(
         id=task.id,
@@ -70,14 +70,14 @@ def _out(row: Row[_TaskRow], today: date) -> TaskOut:
 async def _load(db: AsyncSession, user: User, task_id: int, today: date) -> TaskOut:
     row = (
         await db.execute(
-            _base_query()
+            task_query()
             .where(Task.id == task_id, Task.user_id == user.id)
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
     if row is None:
         raise _not_found()
-    return _out(row, today)
+    return task_out(row, today)
 
 
 def _not_found() -> AppError:
@@ -127,7 +127,7 @@ _ORDER = {
 
 
 async def list_tasks(db: AsyncSession, user: User, params: TaskQuery, today: date) -> Page[TaskOut]:
-    stmt = _base_query().where(Task.user_id == user.id)
+    stmt = task_query().where(Task.user_id == user.id)
     for field in ("status_id", "priority_id", "project_id", "category_id", "process_run_id"):
         value = getattr(params, field)
         if value is not None:
@@ -151,7 +151,7 @@ async def list_tasks(db: AsyncSession, user: User, params: TaskQuery, today: dat
         .limit(params.limit)
         .offset(params.offset)
     )
-    return Page[TaskOut].build([_out(r, today) for r in rows.all()], total, params)
+    return Page[TaskOut].build([task_out(r, today) for r in rows.all()], total, params)
 
 
 async def get_task(db: AsyncSession, user: User, task_id: int, today: date) -> TaskOut:

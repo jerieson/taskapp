@@ -46,3 +46,10 @@ export function formatDayWithWeekday(isoDate: string): string {
   const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number)
   return dayWithWeekdayFormat.format(new Date(year, month - 1, day))
 }
+
+/** "YYYY-MM-DD" shifted by whole days (calendar arithmetic, no time zone shifts). */
+export function shiftDay(isoDate: string, days: number): string {
+  const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day + days))
+  return date.toISOString().slice(0, 10)
+}
