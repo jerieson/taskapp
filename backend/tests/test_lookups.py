@@ -1,4 +1,5 @@
-"""Dropdown values (categories, statuses, priorities) and projects."""
+"""Dropdown values (categories, statuses, priorities, work set-ups, activities, activity
+groups, O&M projects) and projects."""
 
 import re
 
@@ -10,11 +11,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Category, Priority, Project, Role, Status
 from tests.auth_helpers import login_as
-from tests.factories import make_category, make_priority, make_project, make_status
+from tests.factories import (
+    make_activity,
+    make_activity_group,
+    make_category,
+    make_om_project,
+    make_priority,
+    make_project,
+    make_status,
+    make_work_setup,
+)
 
 pytestmark = pytest.mark.anyio
 
-PREFIXES = ("/api/categories", "/api/statuses", "/api/priorities", "/api/projects")
+PREFIXES = (
+    "/api/categories",
+    "/api/statuses",
+    "/api/priorities",
+    "/api/projects",
+    "/api/work-setups",
+    "/api/activities",
+    "/api/activity-groups",
+    "/api/om-projects",
+)
 
 
 def _routes(app: FastAPI) -> list[tuple[str, str]]:
@@ -45,7 +64,7 @@ async def test_non_admin_cannot_write(
 ) -> None:
     await login_as(client, db, role=role)
     writes = [(m, p) for m, p in _routes(app) if m != "GET"]
-    assert len(writes) >= 20
+    assert len(writes) >= 40
     for method, path in writes:
         resp = await client.request(method, path, json={"label": "x", "name": "x", "ids": [1]})
         assert resp.status_code == 403, (method, path, resp.status_code)
@@ -66,6 +85,10 @@ async def test_non_admin_lists_active_only(
         "/api/statuses": (make_status, "label"),
         "/api/priorities": (make_priority, "label"),
         "/api/projects": (make_project, "name"),
+        "/api/work-setups": (make_work_setup, "label"),
+        "/api/activities": (make_activity, "label"),
+        "/api/activity-groups": (make_activity_group, "label"),
+        "/api/om-projects": (make_om_project, "label"),
     }[prefix]
     active = await factory(db)
     inactive = await factory(db, is_active=False)

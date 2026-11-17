@@ -317,3 +317,11 @@ export function SparklesIcon(props: IconProps) {
     </Stroke>
   )
 }
+
+export function UploadIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </Stroke>
+  )
+}

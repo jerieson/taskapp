@@ -5,6 +5,7 @@ Labels and names are generated and unique; tests never depend on seed labels.
 """
 
 import itertools
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -13,7 +14,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.db.base import Base
-from app.models import Category, Priority, ProdLog, Project, Role, Status, Task, Team, User
+from app.models import (
+    Activity,
+    ActivityGroup,
+    ActivityGroupMember,
+    Category,
+    OmProject,
+    Priority,
+    ProdLog,
+    Project,
+    Role,
+    Status,
+    Task,
+    Team,
+    User,
+    WorkSetup,
+)
 
 _seq = itertools.count(1)
 
@@ -71,6 +87,31 @@ async def make_priority(session: AsyncSession, **kw: Any) -> Priority:
 
 async def make_project(session: AsyncSession, **kw: Any) -> Project:
     return await _save(session, Project(**{"name": f"Project {_n()}", **kw}))
+
+
+async def make_work_setup(session: AsyncSession, **kw: Any) -> WorkSetup:
+    """The migration seeds a default work set-up; new ones are not the default."""
+    return await _save(session, WorkSetup(**{"label": f"Work set-up {_n()}", **kw}))
+
+
+async def make_activity(session: AsyncSession, **kw: Any) -> Activity:
+    return await _save(session, Activity(**{"label": f"Activity {_n()}", **kw}))
+
+
+async def make_om_project(session: AsyncSession, **kw: Any) -> OmProject:
+    return await _save(session, OmProject(**{"label": f"OM project {_n()}", **kw}))
+
+
+async def make_activity_group(
+    session: AsyncSession, *, activities: Sequence[Activity] = (), **kw: Any
+) -> ActivityGroup:
+    """`activities` become the group's members, in order."""
+    members = [
+        ActivityGroupMember(activity_id=a.id, sort_order=i) for i, a in enumerate(activities, 1)
+    ]
+    group = ActivityGroup(**{"label": f"Group {_n()}", **kw})
+    group.members = members
+    return await _save(session, group)
 
 
 async def make_task(session: AsyncSession, *, user: User | None = None, **kw: Any) -> Task:

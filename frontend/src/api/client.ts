@@ -4,6 +4,7 @@
  * - Same-origin requests with cookies (the session cookie is httpOnly).
  * - Non-GET requests carry the double-submit CSRF token in X-CSRF-Token. If the
  *   csrf_token cookie is missing (first visit, before login) it is fetched first.
+ * - A FormData body is sent as multipart (file uploads); anything else as JSON.
  * - Errors are thrown as ApiError, parsed from the standard error format.
  * - A 401 calls the handler registered with setUnauthorizedHandler (clears the
  *   cached user and redirects to /login), unless the request opts out.
@@ -109,7 +110,9 @@ async function parseError(response: Response): Promise<ApiError> {
 
 async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  const isForm = options.body instanceof FormData
+  // FormData: the browser sets the multipart Content-Type with its boundary.
+  if (options.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   if (method !== 'GET') headers[CSRF_HEADER] = await csrfToken()
 
   let response: Response
@@ -118,7 +121,12 @@ async function request<T>(method: Method, path: string, options: RequestOptions 
       method,
       headers,
       credentials: 'same-origin',
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined
+          ? undefined
+          : options.body instanceof FormData
+            ? options.body
+            : JSON.stringify(options.body),
       signal: options.signal,
     })
   } catch (error) {

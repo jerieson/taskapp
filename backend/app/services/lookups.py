@@ -1,37 +1,69 @@
-"""Dropdown values: categories, statuses and priorities.
+"""Dropdown values: categories, statuses, priorities, work set-ups, activities,
+activity groups and O&M projects.
 
 Rows are never deleted, only deactivated. Code never refers to a row by its label;
-it uses the is_default / is_done flags. Rules enforced here:
+it uses the is_default / is_done / requires_om_project flags. Rules enforced here:
 
-- Statuses and priorities have exactly one default, which must be active. Setting a
-  new default moves the flag; the default cannot be deactivated.
+- Statuses, priorities and work set-ups have exactly one default, which must be active.
+  Setting a new default moves the flag; the default cannot be deactivated.
 - At least one active status with is_done must remain (once one exists).
+- An activity group's members are replaced as a whole; newly added activities must be
+  active, inactive members already in the group may stay.
 
 Every write takes a per-table transaction advisory lock first, so concurrent admin
 edits are serialised and the checks above cannot race each other.
 """
 
 import logging
+from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import exists, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.pagination import Page, PaginationParams
-from app.models import Category, Priority, Role, Status, User
-from app.schemas.lookups import CategoryOut, LookupCreate, LookupUpdate, StatusCreate, StatusUpdate
+from app.models import (
+    Activity,
+    ActivityGroup,
+    ActivityGroupMember,
+    Category,
+    OmProject,
+    Priority,
+    Role,
+    Status,
+    User,
+    WorkSetup,
+)
 
 logger = logging.getLogger("app.lookups")
 
-type LookupModel = type[Category] | type[Status] | type[Priority]
-type LookupRow = Category | Status | Priority
+type LookupRow = Category | Status | Priority | WorkSetup | Activity | ActivityGroup | OmProject
+type LookupModel = (
+    type[Category]
+    | type[Status]
+    | type[Priority]
+    | type[WorkSetup]
+    | type[Activity]
+    | type[ActivityGroup]
+    | type[OmProject]
+)
+type DefaultModel = type[Status] | type[Priority] | type[WorkSetup]
 
-_NOUN: dict[type, str] = {Category: "category", Status: "status", Priority: "priority"}
+NOUN: dict[type, str] = {
+    Category: "category",
+    Status: "status",
+    Priority: "priority",
+    WorkSetup: "work set-up",
+    Activity: "activity",
+    ActivityGroup: "activity group",
+    OmProject: "O&M project",
+}
 
 
-def _has_default(model: LookupModel) -> bool:
-    return model is not Category
+def _has(model: LookupModel, column: str) -> bool:
+    return column in model.__table__.columns
 
 
 async def lock_table(db: AsyncSession, table: str) -> None:
@@ -47,14 +79,14 @@ def ensure_can_include_inactive(user: User, include_inactive: bool) -> None:
 
 
 def _label_taken(model: LookupModel) -> AppError:
-    message = f"A {_NOUN[model]} with this label already exists"
+    message = f"A {NOUN[model]} with this label already exists"
     return AppError(409, "label_taken", message, fields={"label": message})
 
 
-async def _get(db: AsyncSession, model: LookupModel, row_id: int) -> LookupRow:
+async def _get[R: LookupRow](db: AsyncSession, model: type[R], row_id: int) -> R:
     row = await db.get(model, row_id, populate_existing=True)
     if row is None:
-        raise AppError(404, "not_found", f"{_NOUN[model].capitalize()} not found")
+        raise AppError(404, "not_found", f"{NOUN[model].capitalize()} not found")
     return row
 
 
@@ -86,7 +118,7 @@ async def _ensure_other_done_status(db: AsyncSession, status: Status) -> None:
         raise AppError(409, "last_done_status", message, fields={"is_done": message})
 
 
-async def list_values[O: CategoryOut](
+async def list_values[O: BaseModel](
     db: AsyncSession,
     model: LookupModel,
     out: type[O],
@@ -103,14 +135,15 @@ async def list_values[O: CategoryOut](
     return Page[out].build(rows.all(), total, params)
 
 
-async def create_value(db: AsyncSession, model: LookupModel, data: LookupCreate) -> LookupRow:
+async def create_value(db: AsyncSession, model: LookupModel, data: BaseModel) -> LookupRow:
+    """`data` has `label` and optionally `color`, `is_done`, `requires_om_project`
+    (each only for the tables that have that column)."""
     await lock_table(db, model.__tablename__)
-    await _ensure_label_free(db, model, data.label)
+    values: dict[str, Any] = data.model_dump()
+    await _ensure_label_free(db, model, values["label"])
     last = await db.scalar(select(func.max(model.sort_order)))
-    row = model(label=data.label, color=data.color, sort_order=(last or 0) + 1, is_active=True)
-    if isinstance(data, StatusCreate):
-        row.is_done = data.is_done
-    if _has_default(model):
+    row = model(**values, sort_order=(last or 0) + 1, is_active=True)
+    if _has(model, "is_default"):
         # The first value (or the first after data loss) becomes the default.
         row.is_default = not await db.scalar(select(exists().where(model.is_default)))
     db.add(row)
@@ -121,20 +154,26 @@ async def create_value(db: AsyncSession, model: LookupModel, data: LookupCreate)
 
 
 async def update_value(
-    db: AsyncSession, model: LookupModel, row_id: int, data: LookupUpdate
+    db: AsyncSession, model: LookupModel, row_id: int, data: BaseModel
 ) -> LookupRow:
+    """Omitted fields keep their value; `color` may be cleared with null."""
     await lock_table(db, model.__tablename__)
     row = await _get(db, model, row_id)
-    sent = data.model_fields_set
-    if data.label is not None and data.label != row.label:
-        await _ensure_label_free(db, model, data.label, exclude_id=row.id)
-        row.label = data.label
-    if "color" in sent:
-        row.color = data.color
-    if isinstance(row, Status) and isinstance(data, StatusUpdate) and data.is_done is not None:
-        if row.is_done and not data.is_done and row.is_active:
+    values: dict[str, Any] = data.model_dump(exclude_unset=True)
+    label = values.pop("label", None)
+    if label is not None and label != row.label:
+        await _ensure_label_free(db, model, label, exclude_id=row.id)
+        row.label = label
+    if "color" in values:
+        row.color = values.pop("color")
+    is_done = values.pop("is_done", None)
+    if isinstance(row, Status) and is_done is not None:
+        if row.is_done and not is_done and row.is_active:
             await _ensure_other_done_status(db, row)
-        row.is_done = data.is_done
+        row.is_done = is_done
+    requires_om_project = values.pop("requires_om_project", None)
+    if isinstance(row, Category) and requires_om_project is not None:
+        row.requires_om_project = requires_om_project
     await _commit(db, model)
     await db.refresh(row)
     logger.info("lookup_updated", extra={"fields": {"table": model.__tablename__, "id": row.id}})
@@ -145,11 +184,11 @@ async def set_active(db: AsyncSession, model: LookupModel, row_id: int, active: 
     await lock_table(db, model.__tablename__)
     row = await _get(db, model, row_id)
     if not active and row.is_active:
-        if isinstance(row, Status | Priority) and row.is_default:
+        if isinstance(row, Status | Priority | WorkSetup) and row.is_default:
             raise AppError(
                 409,
                 "default_cannot_be_deactivated",
-                f"Make another {_NOUN[model]} the default before deactivating this one",
+                f"Make another {NOUN[model]} the default before deactivating this one",
             )
         if isinstance(row, Status) and row.is_done:
             await _ensure_other_done_status(db, row)
@@ -164,13 +203,13 @@ async def set_active(db: AsyncSession, model: LookupModel, row_id: int, active: 
 
 
 async def set_default(
-    db: AsyncSession, model: type[Status] | type[Priority], row_id: int
-) -> Status | Priority:
+    db: AsyncSession, model: DefaultModel, row_id: int
+) -> Status | Priority | WorkSetup:
     """Move the default flag to `row_id` in one transaction."""
     await lock_table(db, model.__tablename__)
     row = await db.get(model, row_id, populate_existing=True)
     if row is None:
-        raise AppError(404, "not_found", f"{_NOUN[model].capitalize()} not found")
+        raise AppError(404, "not_found", f"{NOUN[model].capitalize()} not found")
     if not row.is_active:
         raise AppError(
             409, "inactive_cannot_be_default", "Activate this value before making it the default"
@@ -201,3 +240,34 @@ async def reorder(db: AsyncSession, model: LookupModel, ids: list[int]) -> None:
         rows[row_id].sort_order = position
     await db.commit()
     logger.info("lookup_reordered", extra={"fields": {"table": model.__tablename__}})
+
+
+async def set_group_activities(
+    db: AsyncSession, group_id: int, activity_ids: list[int]
+) -> ActivityGroup:
+    """Replace the group's members with `activity_ids`, in that order."""
+    await lock_table(db, ActivityGroup.__tablename__)
+    group = await _get(db, ActivityGroup, group_id)
+    if len(activity_ids) != len(set(activity_ids)):
+        message = "List each activity once"
+        raise AppError(422, "validation_error", message, fields={"activity_ids": message})
+    current = {member.activity_id: member for member in group.members}
+    found = {
+        activity.id: activity
+        for activity in await db.scalars(select(Activity).where(Activity.id.in_(activity_ids)))
+    }
+    for activity_id in activity_ids:
+        activity = found.get(activity_id)
+        if activity is None or (not activity.is_active and activity_id not in current):
+            message = "Choose active activities"
+            raise AppError(422, "invalid_reference", message, fields={"activity_ids": message})
+    members = []
+    for position, activity_id in enumerate(activity_ids, start=1):
+        member = current.get(activity_id) or ActivityGroupMember(activity_id=activity_id)
+        member.sort_order = position
+        members.append(member)
+    group.members = members
+    await db.commit()
+    await db.refresh(group)
+    logger.info("activity_group_members_set", extra={"fields": {"id": group.id}})
+    return group

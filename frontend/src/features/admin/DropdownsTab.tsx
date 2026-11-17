@@ -12,6 +12,9 @@ import {
   useSetLookupActive,
   useSetLookupDefault,
   useUpdateLookup,
+  type ActivityGroup,
+  type Category,
+  type DefaultKind,
   type LookupKind,
   type LookupRow,
   type Status,
@@ -32,12 +35,74 @@ import Modal from '../../components/Modal'
 import { useToast } from '../../components/toast-context'
 import { applyFieldErrors } from '../../lib/forms'
 import ColorDot from '../../components/ColorDot'
+import GroupActivitiesEditor from './GroupActivitiesEditor'
+import ImportDataTab from './ImportDataTab'
 
 const LISTS = [
-  { kind: 'categories', label: 'Categories', singular: 'category' },
-  { kind: 'statuses', label: 'Statuses', singular: 'status' },
-  { kind: 'priorities', label: 'Priorities', singular: 'priority' },
-] as const satisfies readonly { kind: LookupKind; label: string; singular: string }[]
+  {
+    kind: 'categories',
+    label: 'Categories',
+    singular: 'category',
+    hasColor: true,
+    maxLength: 50,
+    hint: '“Has O&M project” categories offer Project (For O&M) on log rows.',
+  },
+  {
+    kind: 'statuses',
+    label: 'Statuses',
+    singular: 'status',
+    hasColor: true,
+    maxLength: 50,
+    hint: 'New tasks get the default status.',
+  },
+  {
+    kind: 'priorities',
+    label: 'Priorities',
+    singular: 'priority',
+    hasColor: true,
+    maxLength: 50,
+    hint: 'New tasks get the default priority. Order them from lowest to highest: sorting tasks by priority uses this order.',
+  },
+  {
+    kind: 'work-setups',
+    label: 'Work set-ups',
+    singular: 'work set-up',
+    hasColor: true,
+    maxLength: 50,
+    hint: 'New log rows get the default work set-up.',
+  },
+  {
+    kind: 'activities',
+    label: 'Activities',
+    singular: 'activity',
+    hasColor: true,
+    maxLength: 100,
+    hint: 'A project offers the activities of its activity group.',
+  },
+  {
+    kind: 'activity-groups',
+    label: 'Activity groups',
+    singular: 'activity group',
+    hasColor: false,
+    maxLength: 50,
+    hint: 'Each project uses one group; pick and order the activities it offers.',
+  },
+  {
+    kind: 'om-projects',
+    label: 'O&M projects',
+    singular: 'O&M project',
+    hasColor: false,
+    maxLength: 100,
+    hint: 'Offered as Project (For O&M) on rows whose category has “Has O&M project”.',
+  },
+] as const satisfies readonly {
+  kind: LookupKind
+  label: string
+  singular: string
+  hasColor: boolean
+  maxLength: number
+  hint: string
+}[]
 
 type ListMeta = (typeof LISTS)[number]
 
@@ -47,16 +112,39 @@ function isKind(value: string | null): value is LookupKind {
 
 const DEFAULT_COLOR = '#13294B'
 
-const valueSchema = z.object({
-  label: z.string().trim().min(1, 'Enter a label').max(50, 'Use at most 50 characters'),
-  hasColor: z.boolean(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Pick a color'),
-  isDone: z.boolean(),
-})
-type ValueForm = z.infer<typeof valueSchema>
+function valueSchema(maxLength: number) {
+  return z.object({
+    label: z
+      .string()
+      .trim()
+      .min(1, 'Enter a label')
+      .max(maxLength, `Use at most ${maxLength} characters`),
+    hasColor: z.boolean(),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Pick a color'),
+    isDone: z.boolean(),
+    requiresOm: z.boolean(),
+  })
+}
+type ValueForm = z.infer<ReturnType<typeof valueSchema>>
+
+function isDefaultKind(kind: LookupKind): kind is DefaultKind {
+  return kind === 'statuses' || kind === 'priorities' || kind === 'work-setups'
+}
 
 function hasDefault(row: LookupRow): row is LookupRow & { is_default: boolean } {
   return 'is_default' in row
+}
+
+function rowColor(row: LookupRow): string | null {
+  return 'color' in row ? row.color : null
+}
+
+function isCategory(row: LookupRow): row is Category {
+  return 'requires_om_project' in row
+}
+
+function isGroup(row: LookupRow): row is ActivityGroup {
+  return 'activity_ids' in row
 }
 
 function isStatus(row: LookupRow): row is Status {
@@ -85,12 +173,13 @@ function ValueFormBody({
     control,
     formState: { errors },
   } = useForm<ValueForm>({
-    resolver: zodResolver(valueSchema),
+    resolver: zodResolver(valueSchema(list.maxLength)),
     defaultValues: {
       label: row?.label ?? '',
-      hasColor: Boolean(row?.color),
-      color: row?.color ?? DEFAULT_COLOR,
+      hasColor: Boolean(row && rowColor(row)),
+      color: (row && rowColor(row)) ?? DEFAULT_COLOR,
       isDone: false,
+      requiresOm: row !== null && isCategory(row) && row.requires_om_project,
     },
   })
   const hasColor = useWatch({ control, name: 'hasColor' })
@@ -98,6 +187,11 @@ function ValueFormBody({
 
   function onSubmit(data: ValueForm) {
     const color = data.hasColor ? data.color.toUpperCase() : null
+    const fields = {
+      label: data.label,
+      ...(list.hasColor ? { color } : {}),
+      ...(list.kind === 'categories' ? { requires_om_project: data.requiresOm } : {}),
+    }
     const options = {
       onSuccess: (saved: LookupRow) => {
         toast.success(row ? `Saved “${saved.label}”` : `Added “${saved.label}”`)
@@ -107,12 +201,10 @@ function ValueFormBody({
         if (!applyFieldErrors(error, setError, ['label', 'color'])) toast.error(errorMessage(error))
       },
     }
-    if (row) update.mutate({ id: row.id, label: data.label, color }, options)
+    if (row) update.mutate({ id: row.id, ...fields }, options)
     else
       create.mutate(
-        list.kind === 'statuses'
-          ? { label: data.label, color, is_done: data.isDone }
-          : { label: data.label, color },
+        list.kind === 'statuses' ? { ...fields, is_done: data.isDone } : fields,
         options,
       )
   }
@@ -126,24 +218,40 @@ function ValueFormBody({
         error={errors.label?.message}
         {...register('label')}
       />
-      <fieldset className="fieldset">
-        <legend className="fieldset-legend pb-0 text-sm">Color</legend>
-        <label className="label min-h-11 cursor-pointer gap-3 text-base-content">
-          <input type="checkbox" className="checkbox checkbox-primary" {...register('hasColor')} />
-          Show a color
-        </label>
-        {hasColor && (
-          <div className="flex items-center gap-3">
+      {list.hasColor && (
+        <fieldset className="fieldset">
+          <legend className="fieldset-legend pb-0 text-sm">Color</legend>
+          <label className="label min-h-11 cursor-pointer gap-3 text-base-content">
             <input
-              type="color"
-              aria-label="Color"
-              className="h-11 w-16 cursor-pointer rounded-field border border-base-300 bg-base-100 p-1"
-              {...register('color')}
+              type="checkbox"
+              className="checkbox checkbox-primary"
+              {...register('hasColor')}
             />
-            <span className="font-mono text-sm text-base-content/80">{color.toUpperCase()}</span>
-          </div>
-        )}
-      </fieldset>
+            Show a color
+          </label>
+          {hasColor && (
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                aria-label="Color"
+                className="h-11 w-16 cursor-pointer rounded-field border border-base-300 bg-base-100 p-1"
+                {...register('color')}
+              />
+              <span className="font-mono text-sm text-base-content/80">{color.toUpperCase()}</span>
+            </div>
+          )}
+        </fieldset>
+      )}
+      {list.kind === 'categories' && (
+        <label className="label mt-2 min-h-11 cursor-pointer gap-3 text-base-content">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-primary"
+            {...register('requiresOm')}
+          />
+          Has O&amp;M project (log rows offer Project (For O&amp;M))
+        </label>
+      )}
       {list.kind === 'statuses' && !row && (
         <label className="label mt-2 min-h-11 cursor-pointer gap-3 text-base-content">
           <input type="checkbox" className="checkbox checkbox-primary" {...register('isDone')} />
@@ -167,15 +275,17 @@ function LookupList({ list }: { list: ListMeta }) {
   const rows = useLookups(list.kind, true)
   const reorder = useReorderLookups(list.kind)
   const setActive = useSetLookupActive(list.kind)
-  // Hooks can't be conditional; categories have no default, so this one is never called there.
-  const setDefault = useSetLookupDefault(list.kind === 'categories' ? 'statuses' : list.kind)
+  // Hooks can't be conditional; lists without a default never call this one.
+  const setDefault = useSetLookupDefault(isDefaultKind(list.kind) ? list.kind : 'statuses')
   const update = useUpdateLookup('statuses')
+  const updateCategory = useUpdateLookup('categories')
   // undefined = closed, null = new value, row = edit.
   const [editing, setEditing] = useState<LookupRow | null | undefined>(undefined)
   const [deactivating, setDeactivating] = useState<LookupRow | null>(null)
+  const [groupMembers, setGroupMembers] = useState<ActivityGroup | null>(null)
 
   const items = rows.data ?? []
-  const supportsDefault = list.kind !== 'categories'
+  const supportsDefault = isDefaultKind(list.kind)
 
   function move(index: number, delta: -1 | 1) {
     const ids = items.map((row) => row.id)
@@ -232,6 +342,21 @@ function LookupList({ list }: { list: ListMeta }) {
     )
   }
 
+  function toggleOm(row: Category) {
+    updateCategory.mutate(
+      { id: row.id, requires_om_project: !row.requires_om_project },
+      {
+        onSuccess: (saved) =>
+          toast.success(
+            saved.requires_om_project
+              ? `“${saved.label}” rows now offer an O&M project`
+              : `“${saved.label}” rows no longer offer an O&M project`,
+          ),
+        onError: (error) => toast.error(errorMessage(error)),
+      },
+    )
+  }
+
   const columns: Column<LookupRow>[] = [
     {
       key: 'label',
@@ -239,7 +364,7 @@ function LookupList({ list }: { list: ListMeta }) {
       isTitle: true,
       cell: (row) => (
         <span className="flex flex-wrap items-center gap-2">
-          <ColorDot color={row.color} />
+          {list.hasColor && <ColorDot color={rowColor(row)} />}
           <span className="break-words">{row.label}</span>
           {hasDefault(row) && row.is_default && (
             <span className="badge badge-sm badge-primary">Default</span>
@@ -298,6 +423,49 @@ function LookupList({ list }: { list: ListMeta }) {
           },
         ]
       : []),
+    ...(list.kind === 'categories'
+      ? [
+          {
+            key: 'om',
+            header: 'Has O&M project',
+            className: 'md:w-40',
+            cell: (row: LookupRow) =>
+              isCategory(row) && (
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary"
+                  checked={row.requires_om_project}
+                  onChange={() => toggleOm(row)}
+                  disabled={updateCategory.isPending}
+                  aria-label={`“${row.label}” has an O&M project`}
+                />
+              ),
+          },
+        ]
+      : []),
+    ...(list.kind === 'activity-groups'
+      ? [
+          {
+            key: 'members',
+            header: 'Activities',
+            className: 'md:w-48',
+            cell: (row: LookupRow) =>
+              isGroup(row) && (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setGroupMembers(row)}
+                  aria-label={`Edit the activities of “${row.label}”`}
+                >
+                  <ListIcon className="size-4" />
+                  {row.activity_ids.length === 1
+                    ? '1 activity'
+                    : `${row.activity_ids.length} activities`}
+                </button>
+              ),
+          },
+        ]
+      : []),
     {
       key: 'actions',
       header: 'Actions',
@@ -352,11 +520,7 @@ function LookupList({ list }: { list: ListMeta }) {
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-base-content/80">
-          {supportsDefault
-            ? `New tasks get the default ${list.singular}. Inactive values stay on existing records.`
-            : 'Inactive values are hidden from selection but stay on existing records.'}
-          {list.kind === 'priorities' &&
-            ' Order them from lowest to highest: sorting tasks by priority uses this order.'}
+          {list.hint} Inactive values are hidden from selection but stay on existing records.
         </p>
         <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
           <PlusIcon />
@@ -397,6 +561,16 @@ function LookupList({ list }: { list: ListMeta }) {
         )}
       </Modal>
 
+      <Modal
+        open={groupMembers !== null}
+        title={`Activities in “${groupMembers?.label ?? ''}”`}
+        onClose={() => setGroupMembers(null)}
+      >
+        {groupMembers && (
+          <GroupActivitiesEditor group={groupMembers} onDone={() => setGroupMembers(null)} />
+        )}
+      </Modal>
+
       <ConfirmModal
         open={deactivating !== null}
         title={`Deactivate ${list.singular}?`}
@@ -424,6 +598,12 @@ export default function DropdownsTab() {
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-base-content/80">
+          Load categories, projects and activities from the productivity log’s Data tab.
+        </p>
+        <ImportDataTab />
+      </div>
       <div className="mb-4 overflow-x-auto">
         <div
           role="tablist"

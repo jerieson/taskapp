@@ -1,8 +1,10 @@
 /*
- * Dropdown values (categories, statuses, priorities) and projects.
+ * Dropdown values (categories, statuses, priorities, work set-ups, activities, activity
+ * groups, O&M projects), projects, and the sheet's Data tab import.
  *
  * Every role can read active values; admins also manage them and see inactive ones.
- * Code never refers to a value by its label: use the `is_default` / `is_done` flags.
+ * Code never refers to a value by its label: use the `is_default` / `is_done` /
+ * `requires_om_project` flags.
  */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -11,24 +13,69 @@ import { api, type Schemas } from './client'
 export type Category = Schemas['CategoryOut']
 export type Status = Schemas['StatusOut']
 export type Priority = Schemas['PriorityOut']
+export type WorkSetup = Schemas['WorkSetupOut']
+export type Activity = Schemas['ActivityOut']
+export type ActivityGroup = Schemas['ActivityGroupOut']
+export type OmProject = Schemas['OmProjectOut']
 export type Project = Schemas['ProjectOut']
+export type DataTabImport = Schemas['DataTabImportOut']
 
-export type LookupKind = 'categories' | 'statuses' | 'priorities'
-export type LookupRow = Category | Status | Priority
+export type LookupKind =
+  | 'categories'
+  | 'statuses'
+  | 'priorities'
+  | 'work-setups'
+  | 'activities'
+  | 'activity-groups'
+  | 'om-projects'
+export type DefaultKind = 'statuses' | 'priorities' | 'work-setups'
+export type LookupRow =
+  Category | Status | Priority | WorkSetup | Activity | ActivityGroup | OmProject
 
 interface LookupTypes {
-  categories: { row: Category; page: Schemas['Page_CategoryOut_']; create: Schemas['LookupCreate'] }
-  statuses: { row: Status; page: Schemas['Page_StatusOut_']; create: Schemas['StatusCreate'] }
+  categories: {
+    row: Category
+    page: Schemas['Page_CategoryOut_']
+    create: Schemas['CategoryCreate']
+    update: Schemas['CategoryUpdate']
+  }
+  statuses: {
+    row: Status
+    page: Schemas['Page_StatusOut_']
+    create: Schemas['StatusCreate']
+    update: Schemas['StatusUpdate']
+  }
   priorities: {
     row: Priority
     page: Schemas['Page_PriorityOut_']
     create: Schemas['LookupCreate']
+    update: Schemas['LookupUpdate']
+  }
+  'work-setups': {
+    row: WorkSetup
+    page: Schemas['Page_WorkSetupOut_']
+    create: Schemas['LookupCreate']
+    update: Schemas['LookupUpdate']
+  }
+  activities: {
+    row: Activity
+    page: Schemas['Page_ActivityOut_']
+    create: Schemas['LongLookupCreate']
+    update: Schemas['LongLookupUpdate']
+  }
+  'activity-groups': {
+    row: ActivityGroup
+    page: Schemas['Page_ActivityGroupOut_']
+    create: Schemas['PlainLookupCreate']
+    update: Schemas['PlainLookupUpdate']
+  }
+  'om-projects': {
+    row: OmProject
+    page: Schemas['Page_OmProjectOut_']
+    create: Schemas['OmProjectCreate']
+    update: Schemas['OmProjectUpdate']
   }
 }
-
-type UpdateBody<K extends LookupKind> = K extends 'statuses'
-  ? Schemas['StatusUpdate']
-  : Schemas['LookupUpdate']
 
 export const PROJECT_PAGE_SIZE = 50
 /** Enough for every value in a select (the API maximum). */
@@ -76,7 +123,7 @@ export function useCreateLookup<K extends LookupKind>(kind: K) {
 export function useUpdateLookup<K extends LookupKind>(kind: K) {
   const invalidate = useInvalidate(kind)
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateBody<K> & { id: number }) =>
+    mutationFn: ({ id, ...data }: LookupTypes[K]['update'] & { id: number }) =>
       api.patch<LookupTypes[K]['row']>(`/${kind}/${id}`, data),
     onSuccess: invalidate,
   })
@@ -91,12 +138,35 @@ export function useSetLookupActive(kind: LookupKind) {
   })
 }
 
-/** Statuses and priorities only: the previous default loses the flag. */
-export function useSetLookupDefault(kind: 'statuses' | 'priorities') {
+/** Statuses, priorities and work set-ups only: the previous default loses the flag. */
+export function useSetLookupDefault(kind: DefaultKind) {
   const invalidate = useInvalidate(kind)
   return useMutation({
-    mutationFn: (id: number) => api.post<Status | Priority>(`/${kind}/${id}/default`),
+    mutationFn: (id: number) => api.post<Status | Priority | WorkSetup>(`/${kind}/${id}/default`),
     onSuccess: invalidate,
+  })
+}
+
+/** Replace an activity group's members with `activityIds`, in that order. */
+export function useSetGroupActivities() {
+  const invalidate = useInvalidate('activity-groups')
+  return useMutation({
+    mutationFn: ({ id, activityIds }: { id: number; activityIds: number[] }) =>
+      api.put<ActivityGroup>(`/activity-groups/${id}/activities`, { activity_ids: activityIds }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Upload the sheet's Data tab (CSV). Refreshes every dropdown list afterwards. */
+export function useImportDataTab() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return api.post<DataTabImport>('/admin/import/data-tab', form)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: lookupKeys.all }),
   })
 }
 
@@ -192,15 +262,12 @@ export interface SelectOption {
 /** The value stored on an existing record (dropdown values have `label`, projects `name`). */
 export type CurrentValue = { id: number } & ({ label: string } | { name: string })
 
-type AnyPage =
-  | Schemas['Page_CategoryOut_']
-  | Schemas['Page_StatusOut_']
-  | Schemas['Page_PriorityOut_']
-  | Schemas['Page_ProjectOut_']
+type AnyPage = LookupTypes[LookupKind]['page'] | Schemas['Page_ProjectOut_']
 
 function toOption(row: AnyPage['items'][number]): SelectOption {
   if ('name' in row) return { id: row.id, label: row.name, color: null, isActive: row.is_active }
-  return { id: row.id, label: row.label, color: row.color, isActive: row.is_active }
+  const color = 'color' in row ? row.color : null
+  return { id: row.id, label: row.label, color, isActive: row.is_active }
 }
 
 /** Active options in display order, plus `current` if it is no longer active. */

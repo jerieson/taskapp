@@ -32,6 +32,7 @@ Use current stable versions of everything. Check the latest version at install t
 - Pydantic v2 + pydantic-settings
 - `pwdlib[argon2]` for password hashing
 - Authlib for Google OAuth
+- `python-multipart` for CSV uploads (FastAPI `UploadFile`)
 - pytest + httpx for tests
 - ruff for lint and format
 

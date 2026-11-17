@@ -456,6 +456,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/import/data-tab": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Data Tab
+         * @description Create missing categories, projects, activity groups, activities and O&M projects
+         *     from the Data tab and link them. Idempotent; never deletes or renames anything.
+         */
+        post: operations["import_data_tab_api_admin_import_data_tab_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -519,6 +540,27 @@ export interface paths {
         put?: never;
         /** Deactivate Project */
         post: operations["deactivate_project_api_projects__project_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/log-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Log Options
+         * @description Active categories, projects (with category links and activity group), activity
+         *     groups (with their active activity ids), activities, O&M projects and work set-ups.
+         */
+        get: operations["get_log_options_api_log_options_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1549,6 +1591,396 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/work-setups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Work Setups */
+        get: operations["list_work_setups_api_work_setups_get"];
+        put?: never;
+        /**
+         * Create Work Setup
+         * @description The first work set-up ever created becomes the default.
+         */
+        post: operations["create_work_setup_api_work_setups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work-setups/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Work Setups */
+        put: operations["reorder_work_setups_api_work_setups_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work-setups/{work_setup_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Work Setup */
+        patch: operations["update_work_setup_api_work_setups__work_setup_id__patch"];
+        trace?: never;
+    };
+    "/api/work-setups/{work_setup_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Work Setup */
+        post: operations["activate_work_setup_api_work_setups__work_setup_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work-setups/{work_setup_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate Work Setup
+         * @description Rejected for the default work set-up.
+         */
+        post: operations["deactivate_work_setup_api_work_setups__work_setup_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work-setups/{work_setup_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Default Work Setup
+         * @description Make this (active) work set-up the default; the previous default loses the flag.
+         */
+        post: operations["set_default_work_setup_api_work_setups__work_setup_id__default_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Activities */
+        get: operations["list_activities_api_activities_get"];
+        put?: never;
+        /** Create Activity */
+        post: operations["create_activity_api_activities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activities/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Activities */
+        put: operations["reorder_activities_api_activities_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activities/{activity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Activity */
+        patch: operations["update_activity_api_activities__activity_id__patch"];
+        trace?: never;
+    };
+    "/api/activities/{activity_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Activity */
+        post: operations["activate_activity_api_activities__activity_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activities/{activity_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Activity */
+        post: operations["deactivate_activity_api_activities__activity_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Activity Groups */
+        get: operations["list_activity_groups_api_activity_groups_get"];
+        put?: never;
+        /** Create Activity Group */
+        post: operations["create_activity_group_api_activity_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity-groups/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Activity Groups */
+        put: operations["reorder_activity_groups_api_activity_groups_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Activity Group */
+        patch: operations["update_activity_group_api_activity_groups__group_id__patch"];
+        trace?: never;
+    };
+    "/api/activity-groups/{group_id}/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Activity Group Members
+         * @description Replace the group's activities with `activity_ids`, in that order.
+         */
+        put: operations["set_activity_group_members_api_activity_groups__group_id__activities_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity-groups/{group_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Activity Group */
+        post: operations["activate_activity_group_api_activity_groups__group_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity-groups/{group_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Activity Group */
+        post: operations["deactivate_activity_group_api_activity_groups__group_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/om-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Om Projects */
+        get: operations["list_om_projects_api_om_projects_get"];
+        put?: never;
+        /** Create Om Project */
+        post: operations["create_om_project_api_om_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/om-projects/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Om Projects */
+        put: operations["reorder_om_projects_api_om_projects_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/om-projects/{om_project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Om Project */
+        patch: operations["update_om_project_api_om_projects__om_project_id__patch"];
+        trace?: never;
+    };
+    "/api/om-projects/{om_project_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Om Project */
+        post: operations["activate_om_project_api_om_projects__om_project_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/om-projects/{om_project_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Om Project */
+        post: operations["deactivate_om_project_api_om_projects__om_project_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1566,6 +1998,32 @@ export interface components {
             input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+        };
+        /** ActivityGroupOut */
+        ActivityGroupOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Activity Ids */
+            activity_ids: number[];
+        };
+        /** ActivityOut */
+        ActivityOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Color */
+            color: string | null;
         };
         /** AdminOverview */
         AdminOverview: {
@@ -1608,6 +2066,26 @@ export interface components {
             /** Team Id */
             team_id?: number | null;
         };
+        /** Body_import_data_tab_api_admin_import_data_tab_post */
+        Body_import_data_tab_api_admin_import_data_tab_post: {
+            /**
+             * File
+             * @description The sheet's Data tab saved as CSV
+             */
+            file: string;
+        };
+        /** CategoryCreate */
+        CategoryCreate: {
+            /** Label */
+            label: string;
+            /** Color */
+            color?: string | null;
+            /**
+             * Requires Om Project
+             * @default false
+             */
+            requires_om_project: boolean;
+        };
         /** CategoryHours */
         CategoryHours: {
             category: components["schemas"]["LookupRef"];
@@ -1620,12 +2098,23 @@ export interface components {
             id: number;
             /** Label */
             label: string;
-            /** Color */
-            color: string | null;
             /** Sort Order */
             sort_order: number;
             /** Is Active */
             is_active: boolean;
+            /** Color */
+            color: string | null;
+            /** Requires Om Project */
+            requires_om_project: boolean;
+        };
+        /** CategoryUpdate */
+        CategoryUpdate: {
+            /** Label */
+            label?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Requires Om Project */
+            requires_om_project?: boolean | null;
         };
         /** ChangePasswordIn */
         ChangePasswordIn: {
@@ -1662,6 +2151,21 @@ export interface components {
             /** Workday Hours */
             workday_hours: number;
         };
+        /** DataTabImportOut */
+        DataTabImportOut: {
+            created: components["schemas"]["ImportCounts"];
+            linked: components["schemas"]["ImportLinks"];
+            /** Group Conflicts */
+            group_conflicts: components["schemas"]["GroupConflict"][];
+            /** Unlinked Groups */
+            unlinked_groups: string[];
+            /** Inactive Reused */
+            inactive_reused: string[];
+            /** Unrecognised Columns */
+            unrecognised_columns: string[];
+            /** Empty Columns */
+            empty_columns: string[];
+        };
         /** DayHours */
         DayHours: {
             /**
@@ -1695,6 +2199,24 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /**
+         * GroupActivitiesIn
+         * @description The group's complete, ordered member list. Newly added activities must be active;
+         *     inactive members already in the group may stay.
+         */
+        GroupActivitiesIn: {
+            /** Activity Ids */
+            activity_ids: number[];
+        };
+        /** GroupConflict */
+        GroupConflict: {
+            /** Project */
+            project: string;
+            /** Current Group */
+            current_group: string;
+            /** File Group */
+            file_group: string;
         };
         /** HealthOut */
         HealthOut: {
@@ -1781,6 +2303,57 @@ export interface components {
         HoursPerWeek: {
             /** Weeks */
             weeks: components["schemas"]["WeekHours"][];
+        };
+        /** ImportCounts */
+        ImportCounts: {
+            /**
+             * Categories
+             * @default 0
+             */
+            categories: number;
+            /**
+             * Projects
+             * @default 0
+             */
+            projects: number;
+            /**
+             * Activity Groups
+             * @default 0
+             */
+            activity_groups: number;
+            /**
+             * Activities
+             * @default 0
+             */
+            activities: number;
+            /**
+             * Om Projects
+             * @default 0
+             */
+            om_projects: number;
+        };
+        /** ImportLinks */
+        ImportLinks: {
+            /**
+             * Project Categories
+             * @default 0
+             */
+            project_categories: number;
+            /**
+             * Project Groups
+             * @default 0
+             */
+            project_groups: number;
+            /**
+             * Group Activities
+             * @default 0
+             */
+            group_activities: number;
+            /**
+             * Om Flags
+             * @default 0
+             */
+            om_flags: number;
         };
         /** InviteAcceptIn */
         InviteAcceptIn: {
@@ -1905,12 +2478,67 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** LogOptionGroup */
+        LogOptionGroup: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Activity Ids */
+            activity_ids: number[];
+        };
+        /** LogOptionProject */
+        LogOptionProject: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Category Ids */
+            category_ids: number[];
+            /** Activity Group Id */
+            activity_group_id: number | null;
+        };
+        /**
+         * LogOptionsOut
+         * @description Every active value the log form needs, in display order.
+         */
+        LogOptionsOut: {
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
+            /** Projects */
+            projects: components["schemas"]["LogOptionProject"][];
+            /** Activity Groups */
+            activity_groups: components["schemas"]["LogOptionGroup"][];
+            /** Activities */
+            activities: components["schemas"]["ActivityOut"][];
+            /** Om Projects */
+            om_projects: components["schemas"]["OmProjectOut"][];
+            /** Work Setups */
+            work_setups: components["schemas"]["WorkSetupOut"][];
+        };
         /** LoginIn */
         LoginIn: {
             /** Username */
             username: string;
             /** Password */
             password: string;
+        };
+        /** LongLookupCreate */
+        LongLookupCreate: {
+            /** Label */
+            label: string;
+            /** Color */
+            color?: string | null;
+        };
+        /**
+         * LongLookupUpdate
+         * @description Omitted fields keep their value. Send `"color": null` to clear the color.
+         */
+        LongLookupUpdate: {
+            /** Label */
+            label?: string | null;
+            /** Color */
+            color?: string | null;
         };
         /** LookupCreate */
         LookupCreate: {
@@ -1995,10 +2623,53 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** OmProjectCreate */
+        OmProjectCreate: {
+            /** Label */
+            label: string;
+        };
+        /** OmProjectOut */
+        OmProjectOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Is Active */
+            is_active: boolean;
+        };
+        /** OmProjectUpdate */
+        OmProjectUpdate: {
+            /** Label */
+            label?: string | null;
+        };
         /** Page[AIUsageRow] */
         Page_AIUsageRow_: {
             /** Items */
             items: components["schemas"]["AIUsageRow"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[ActivityGroupOut] */
+        Page_ActivityGroupOut_: {
+            /** Items */
+            items: components["schemas"]["ActivityGroupOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[ActivityOut] */
+        Page_ActivityOut_: {
+            /** Items */
+            items: components["schemas"]["ActivityOut"][];
             /** Total */
             total: number;
             /** Limit */
@@ -2032,6 +2703,17 @@ export interface components {
         Page_InviteOut_: {
             /** Items */
             items: components["schemas"]["InviteOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[OmProjectOut] */
+        Page_OmProjectOut_: {
+            /** Items */
+            items: components["schemas"]["OmProjectOut"][];
             /** Total */
             total: number;
             /** Limit */
@@ -2138,6 +2820,17 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** Page[WorkSetupOut] */
+        Page_WorkSetupOut_: {
+            /** Items */
+            items: components["schemas"]["WorkSetupOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** PasswordResetCheck */
         PasswordResetCheck: {
             /** Valid */
@@ -2161,6 +2854,16 @@ export interface components {
         PasswordResetIn: {
             /** New Password */
             new_password: string;
+        };
+        /** PlainLookupCreate */
+        PlainLookupCreate: {
+            /** Label */
+            label: string;
+        };
+        /** PlainLookupUpdate */
+        PlainLookupUpdate: {
+            /** Label */
+            label?: string | null;
         };
         /**
          * PlanItemCreate
@@ -2219,12 +2922,12 @@ export interface components {
             id: number;
             /** Label */
             label: string;
-            /** Color */
-            color: string | null;
             /** Sort Order */
             sort_order: number;
             /** Is Active */
             is_active: boolean;
+            /** Color */
+            color: string | null;
             /** Is Default */
             is_default: boolean;
         };
@@ -2459,6 +3162,13 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Category Ids
+             * @default []
+             */
+            category_ids: number[];
+            /** Activity Group Id */
+            activity_group_id?: number | null;
         };
         /** ProjectHours */
         ProjectHours: {
@@ -2481,6 +3191,10 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Category Ids */
+            category_ids: number[];
+            /** Activity Group Id */
+            activity_group_id: number | null;
         };
         /** ProjectRef */
         ProjectRef: {
@@ -2493,13 +3207,18 @@ export interface components {
         };
         /**
          * ProjectUpdate
-         * @description Omitted fields keep their value.
+         * @description Omitted fields keep their value. `category_ids` replaces the whole list;
+         *     send `"activity_group_id": null` to clear the group.
          */
         ProjectUpdate: {
             /** Name */
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Category Ids */
+            category_ids?: number[] | null;
+            /** Activity Group Id */
+            activity_group_id?: number | null;
         };
         /**
          * ReorderIn
@@ -2581,12 +3300,12 @@ export interface components {
             id: number;
             /** Label */
             label: string;
-            /** Color */
-            color: string | null;
             /** Sort Order */
             sort_order: number;
             /** Is Active */
             is_active: boolean;
+            /** Color */
+            color: string | null;
             /** Is Default */
             is_default: boolean;
             /** Is Done */
@@ -2901,6 +3620,21 @@ export interface components {
             week_start: string;
             /** Hours */
             hours: number;
+        };
+        /** WorkSetupOut */
+        WorkSetupOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Color */
+            color: string | null;
+            /** Is Default */
+            is_default: boolean;
         };
     };
     responses: never;
@@ -4000,6 +4734,48 @@ export interface operations {
             };
         };
     };
+    import_data_tab_api_admin_import_data_tab_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_data_tab_api_admin_import_data_tab_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataTabImportOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_projects_api_projects_get: {
         parameters: {
             query?: {
@@ -4186,6 +4962,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_log_options_api_log_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogOptionsOut"];
                 };
             };
             /** @description Client error */
@@ -6322,7 +7136,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LookupCreate"];
+                "application/json": components["schemas"]["CategoryCreate"];
             };
         };
         responses: {
@@ -6406,7 +7220,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LookupUpdate"];
+                "application/json": components["schemas"]["CategoryUpdate"];
             };
         };
         responses: {
@@ -7073,6 +7887,1082 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PriorityOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_work_setups_api_work_setups_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_WorkSetupOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_work_setup_api_work_setups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSetupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_work_setups_api_work_setups_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_work_setup_api_work_setups__work_setup_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_setup_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSetupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_work_setup_api_work_setups__work_setup_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_setup_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSetupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_work_setup_api_work_setups__work_setup_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_setup_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSetupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_default_work_setup_api_work_setups__work_setup_id__default_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_setup_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSetupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_activities_api_activities_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ActivityOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_activity_api_activities_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LongLookupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_activities_api_activities_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_activity_api_activities__activity_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                activity_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LongLookupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_activity_api_activities__activity_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                activity_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_activity_api_activities__activity_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                activity_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_activity_groups_api_activity_groups_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ActivityGroupOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_activity_group_api_activity_groups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlainLookupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityGroupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_activity_groups_api_activity_groups_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_activity_group_api_activity_groups__group_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlainLookupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityGroupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_activity_group_members_api_activity_groups__group_id__activities_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupActivitiesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityGroupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_activity_group_api_activity_groups__group_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityGroupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_activity_group_api_activity_groups__group_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityGroupOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_om_projects_api_om_projects_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_OmProjectOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_om_project_api_om_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OmProjectCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OmProjectOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_om_projects_api_om_projects_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_om_project_api_om_projects__om_project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                om_project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OmProjectUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OmProjectOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_om_project_api_om_projects__om_project_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                om_project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OmProjectOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_om_project_api_om_projects__om_project_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                om_project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OmProjectOut"];
                 };
             };
             /** @description Client error */

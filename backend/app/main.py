@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI
 
 from app.ai.providers.factory import build_provider
 from app.api.routers import (
+    admin_import,
     admin_invites,
     admin_overview,
     admin_teams,
@@ -15,6 +16,7 @@ from app.api.routers import (
     dashboard,
     health,
     invites,
+    log_options,
     lookups,
     password_resets,
     process_runs,
@@ -79,7 +81,9 @@ def create_app() -> FastAPI:
         admin_users,
         admin_invites,
         admin_overview,
+        admin_import,
         projects,
+        log_options,
         tasks,
         prod_logs,
         daily_plans,
@@ -91,7 +95,15 @@ def create_app() -> FastAPI:
         ai,
     ):
         app.include_router(module.router, prefix="/api")
-    for router in (lookups.categories, lookups.statuses, lookups.priorities):
+    for router in (
+        lookups.categories,
+        lookups.statuses,
+        lookups.priorities,
+        lookups.work_setups,
+        lookups.activities,
+        lookups.activity_groups,
+        lookups.om_projects,
+    ):
         app.include_router(router, prefix="/api")
 
     return app

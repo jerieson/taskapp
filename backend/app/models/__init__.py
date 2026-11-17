@@ -4,7 +4,18 @@ from app.models.ai import AIRequest, AISummary
 from app.models.auth import Invite, PasswordReset, UserSession
 from app.models.daily_plan import DailyPlan, DailyPlanItem
 from app.models.enums import AIFeature, Role, RunStatus
-from app.models.lookups import Category, Priority, Project, Status
+from app.models.lookups import (
+    Activity,
+    ActivityGroup,
+    ActivityGroupMember,
+    Category,
+    OmProject,
+    Priority,
+    Project,
+    Status,
+    WorkSetup,
+    project_categories,
+)
 from app.models.process import Process, ProcessRun, ProcessStep
 from app.models.prod_log import ProdLog
 from app.models.task import Task
@@ -15,10 +26,14 @@ __all__ = [
     "AIFeature",
     "AIRequest",
     "AISummary",
+    "Activity",
+    "ActivityGroup",
+    "ActivityGroupMember",
     "Category",
     "DailyPlan",
     "DailyPlanItem",
     "Invite",
+    "OmProject",
     "PasswordReset",
     "Priority",
     "Process",
@@ -33,4 +48,6 @@ __all__ = [
     "Team",
     "User",
     "UserSession",
+    "WorkSetup",
+    "project_categories",
 ]
