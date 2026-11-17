@@ -260,3 +260,43 @@ export function FilterIcon(props: IconProps) {
     </Stroke>
   )
 }
+
+export function ArrowUpIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </Stroke>
+  )
+}
+
+export function ArrowDownIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M12 5v14M19 12l-7 7-7-7" />
+    </Stroke>
+  )
+}
+
+export function StarIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
+    </Stroke>
+  )
+}
+
+export function ListIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </Stroke>
+  )
+}
+
+export function FolderIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+    </Stroke>
+  )
+}

@@ -1,8 +1,10 @@
 import { useSearchParams } from 'react-router'
 
 import PageHeader from '../../components/PageHeader'
+import DropdownsTab from './DropdownsTab'
 import InvitesTab from './InvitesTab'
 import OverviewTab from './OverviewTab'
+import ProjectsTab from './ProjectsTab'
 import TeamsTab from './TeamsTab'
 import UsersTab from './UsersTab'
 
@@ -11,6 +13,8 @@ const TABS = [
   { id: 'teams', label: 'Teams', Component: TeamsTab },
   { id: 'users', label: 'Users', Component: UsersTab },
   { id: 'invites', label: 'Invites', Component: InvitesTab },
+  { id: 'dropdowns', label: 'Dropdowns', Component: DropdownsTab },
+  { id: 'projects', label: 'Projects', Component: ProjectsTab },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -28,7 +32,10 @@ export default function AdminPage() {
 
   return (
     <>
-      <PageHeader title="Admin" description="Teams, users and invites." />
+      <PageHeader
+        title="Admin"
+        description="Teams, users, invites, dropdown values and projects."
+      />
       <div className="mb-6 overflow-x-auto">
         <div role="tablist" aria-label="Admin sections" className="tabs tabs-box w-max min-w-full">
           {TABS.map((tab) => (

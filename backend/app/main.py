@@ -7,7 +7,9 @@ from app.api.routers import (
     auth,
     health,
     invites,
+    lookups,
     password_resets,
+    projects,
 )
 from app.core.config import get_settings
 from app.core.csrf import csrf_protect
@@ -51,8 +53,11 @@ def create_app() -> FastAPI:
         admin_teams,
         admin_users,
         admin_invites,
+        projects,
     ):
         app.include_router(module.router, prefix="/api")
+    for router in (lookups.categories, lookups.statuses, lookups.priorities):
+        app.include_router(router, prefix="/api")
 
     return app
 

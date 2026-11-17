@@ -1,15 +1,18 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 
 import PlaceholderPage from '../components/PlaceholderPage'
-import AdminPage from '../features/admin/AdminPage'
-import InvitePage from '../features/auth/InvitePage'
-import LoginPage from '../features/auth/LoginPage'
-import ProfilePage from '../features/auth/ProfilePage'
-import ResetPasswordPage from '../features/auth/ResetPasswordPage'
 import AppLayout from '../layouts/AppLayout'
 import { RedirectIfAuthenticated, RequireAuth, RequireRole } from './guards'
 import { ADMIN_ROLES, TEAM_ROLES } from './nav'
 import NotFoundPage from './NotFoundPage'
+import {
+  AdminPage,
+  InvitePage,
+  LoginPage,
+  ProfilePage,
+  PublicPage,
+  ResetPasswordPage,
+} from './pages'
 import RouteErrorPage from './RouteErrorPage'
 
 /** Paths that work without a session (no redirect to /login on 401). */
@@ -23,12 +26,28 @@ export const router = createBrowserRouter([
         path: '/login',
         element: (
           <RedirectIfAuthenticated>
-            <LoginPage />
+            <PublicPage>
+              <LoginPage />
+            </PublicPage>
           </RedirectIfAuthenticated>
         ),
       },
-      { path: '/invite/:token', element: <InvitePage /> },
-      { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+      {
+        path: '/invite/:token',
+        element: (
+          <PublicPage>
+            <InvitePage />
+          </PublicPage>
+        ),
+      },
+      {
+        path: '/reset-password/:token',
+        element: (
+          <PublicPage>
+            <ResetPasswordPage />
+          </PublicPage>
+        ),
+      },
       {
         element: <RequireAuth />,
         children: [

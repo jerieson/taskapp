@@ -155,6 +155,12 @@ export default function TeamsTab() {
             icon={<UsersIcon className="size-6" />}
             title="No teams yet"
             description="Create a team before inviting managers and developers."
+            action={
+              <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
+                <PlusIcon />
+                New team
+              </button>
+            }
           />
         }
       />

@@ -2,7 +2,7 @@
  * Authenticated shell: daisyUI drawer with a sidebar that is permanent from lg up
  * and a slide-over (hamburger button) below lg, plus the top navbar.
  */
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, Suspense, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 
 import { useCurrentUser, useLogout, type CurrentUser } from '../api/auth'
@@ -14,6 +14,7 @@ import {
   MenuIcon,
   UserIcon,
 } from '../components/icons'
+import { SkeletonPage } from '../components/Skeleton'
 import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/toast-context'
 import { NAV_SECTIONS } from '../routes/nav'
@@ -247,7 +248,11 @@ export default function AppLayout() {
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl min-w-0 flex-1 p-4 md:p-6">
-          <Outlet />
+          {/* Keyed by path: a fresh boundary shows its fallback even when the
+              router navigates inside a transition. */}
+          <Suspense key={location.pathname} fallback={<SkeletonPage />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <div className="drawer-side z-40">

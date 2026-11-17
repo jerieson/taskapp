@@ -4,9 +4,9 @@
  */
 import type { ReactNode } from 'react'
 
+import AsyncState from './AsyncState'
 import EmptyState from './EmptyState'
-import ErrorAlert from './ErrorAlert'
-import { SkeletonRows } from './Skeleton'
+import { SkeletonTable } from './Skeleton'
 
 export interface Column<T> {
   key: string
@@ -43,10 +43,29 @@ export default function DataTable<T>({
   empty,
   caption,
 }: DataTableProps<T>) {
-  if (isLoading) return <SkeletonRows />
-  if (error) return <ErrorAlert error={error} onRetry={onRetry} />
-  if (!rows || rows.length === 0) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>
+  return (
+    <AsyncState
+      query={{ isPending: Boolean(isLoading), error, refetch: onRetry }}
+      isEmpty={!rows || rows.length === 0}
+      skeleton={
+        <SkeletonTable
+          columns={columns.length}
+          hasActions={columns.some((c) => c.hideLabelOnCard)}
+        />
+      }
+      empty={empty ?? <EmptyState title="Nothing here yet" />}
+    >
+      {() => <Table columns={columns} rows={rows ?? []} rowKey={rowKey} caption={caption} />}
+    </AsyncState>
+  )
+}
 
+function Table<T>({
+  columns,
+  rows,
+  rowKey,
+  caption,
+}: Pick<DataTableProps<T>, 'columns' | 'rowKey' | 'caption'> & { rows: T[] }) {
   const titleColumn = columns.find((c) => c.isTitle)
   const bodyColumns = columns.filter((c) => !c.isTitle)
 

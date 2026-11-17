@@ -24,6 +24,7 @@ import { InputField, SelectField, SubmitButton } from '../../components/FormFiel
 import { LinkIcon, PlusIcon, TrashIcon } from '../../components/icons'
 import Modal from '../../components/Modal'
 import Pagination from '../../components/Pagination'
+import { SkeletonForm } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
 import { applyFieldErrors } from '../../lib/forms'
 import { formatDateTime } from '../../lib/format'
@@ -252,6 +253,12 @@ export default function InvitesTab() {
             icon={<LinkIcon className="size-6" />}
             title="No invites yet"
             description="Invite a manager or developer. You copy the link and send it yourself."
+            action={
+              <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                <PlusIcon />
+                New invite
+              </button>
+            }
           />
         }
       />
@@ -266,7 +273,7 @@ export default function InvitesTab() {
 
       <Modal open={creating} title="New invite" onClose={() => setCreating(false)}>
         {teams.isPending ? (
-          <span className="loading loading-spinner" aria-label="Loading teams" />
+          <SkeletonForm fields={3} />
         ) : (
           <InviteFormBody
             teams={teams.data ?? []}
