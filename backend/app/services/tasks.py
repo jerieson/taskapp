@@ -5,6 +5,8 @@ Rules enforced here:
 - New tasks without a status/priority get the default one (found by `is_default`).
 - Moving to a status with `is_done` sets `completed_at`; moving to a status without it
   clears `completed_at`. Moving between two done statuses keeps the original time.
+- Changing the status of (or deleting) a task from a process run updates the run's
+  status (see `services.run_status`).
 - Create accepts only active dropdown values and projects. Update also accepts the
   value already on the task, even if it has since been deactivated.
 """
@@ -31,6 +33,7 @@ from app.schemas.tasks import (
     TaskUpdate,
 )
 from app.services.refs import REFS, check_ref
+from app.services.run_status import sync_run_status
 
 logger = logging.getLogger("app.tasks")
 
@@ -94,7 +97,7 @@ async def _get_own(db: AsyncSession, user: User, task_id: int) -> Task:
     return task
 
 
-async def _default(db: AsyncSession, model: type[Status] | type[Priority], noun: str) -> int:
+async def default_id(db: AsyncSession, model: type[Status] | type[Priority], noun: str) -> int:
     row_id = await db.scalar(select(model.id).where(model.is_default, model.is_active))
     if row_id is None:
         raise AppError(
@@ -105,7 +108,7 @@ async def _default(db: AsyncSession, model: type[Status] | type[Priority], noun:
     return row_id
 
 
-def _apply_status(task: Task, status: Status, was_done: bool, now: datetime) -> None:
+def apply_status(task: Task, status: Status, was_done: bool, now: datetime) -> None:
     if status.is_done and not was_done:
         task.completed_at = now
     elif not status.is_done:
@@ -166,8 +169,8 @@ async def create_task(db: AsyncSession, user: User, data: TaskCreate, today: dat
         value = getattr(data, field)
         if value is not None:
             await check_ref(db, field, value, keep=None)
-    status_id = data.status_id or await _default(db, Status, "status")
-    priority_id = data.priority_id or await _default(db, Priority, "priority")
+    status_id = data.status_id or await default_id(db, Status, "status")
+    priority_id = data.priority_id or await default_id(db, Priority, "priority")
     status = await db.get_one(Status, status_id)
 
     task = Task(
@@ -180,7 +183,7 @@ async def create_task(db: AsyncSession, user: User, data: TaskCreate, today: dat
         priority_id=priority_id,
         due_date=data.due_date,
     )
-    _apply_status(task, status, was_done=False, now=utcnow())
+    apply_status(task, status, was_done=False, now=utcnow())
     db.add(task)
     await db.commit()
     logger.info("task_created", extra={"fields": {"task_id": task.id}})
@@ -202,7 +205,10 @@ async def update_task(
     if "status_id" in sent and data.status_id != task.status_id:
         old = await db.get_one(Status, task.status_id)
         new = await db.get_one(Status, data.status_id)
-        _apply_status(task, new, was_done=old.is_done, now=utcnow())
+        apply_status(task, new, was_done=old.is_done, now=utcnow())
+        status_changed = True
+    else:
+        status_changed = False
 
     for field in ("title", "status_id", "priority_id", "project_id", "category_id", "due_date"):
         if field in sent:
@@ -210,14 +216,21 @@ async def update_task(
     if "description" in sent:
         task.description = data.description or None
 
+    if status_changed and task.process_run_id is not None:
+        await sync_run_status(db, task.process_run_id)
     await db.commit()
     logger.info("task_updated", extra={"fields": {"task_id": task.id}})
     return await _load(db, user, task.id, today)
 
 
 async def delete_task(db: AsyncSession, user: User, task_id: int) -> None:
-    """Prod logs keep their data (task_id SET NULL); daily plan items go (CASCADE)."""
+    """Prod logs keep their data (task_id SET NULL); daily plan items go (CASCADE).
+
+    Deleting a run's last open task can complete the run."""
     task = await _get_own(db, user, task_id)
+    run_id = task.process_run_id
     await db.delete(task)
+    if run_id is not None:
+        await sync_run_status(db, run_id)
     await db.commit()
     logger.info("task_deleted", extra={"fields": {"task_id": task_id}})

@@ -300,3 +300,11 @@ export function FolderIcon(props: IconProps) {
     </Stroke>
   )
 }
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M7 4.5v15l12-7.5z" />
+    </Stroke>
+  )
+}

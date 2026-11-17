@@ -10,6 +10,8 @@ from app.api.routers import (
     invites,
     lookups,
     password_resets,
+    process_runs,
+    processes,
     prod_logs,
     projects,
     tasks,
@@ -61,6 +63,8 @@ def create_app() -> FastAPI:
         tasks,
         prod_logs,
         daily_plans,
+        processes,
+        process_runs,
         teams,
     ):
         app.include_router(module.router, prefix="/api")
