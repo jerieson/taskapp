@@ -2,7 +2,6 @@
 
 from app.models.ai import AIRequest, AISummary
 from app.models.auth import Invite, PasswordReset, UserSession
-from app.models.daily_plan import DailyPlan, DailyPlanItem
 from app.models.enums import AIFeature, Role, RunStatus
 from app.models.lookups import (
     Activity,
@@ -30,8 +29,6 @@ __all__ = [
     "ActivityGroup",
     "ActivityGroupMember",
     "Category",
-    "DailyPlan",
-    "DailyPlanItem",
     "Invite",
     "OmProject",
     "PasswordReset",

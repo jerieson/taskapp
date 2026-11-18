@@ -2,6 +2,8 @@
  * Team dashboard pieces that list members: a member's name with notes (former
  * member, deactivated), and a members-by-period hours table.
  */
+import type { ReactNode } from 'react'
+
 import type { DashboardMember } from '../../api/dashboard'
 import { formatHours } from '../../lib/format'
 import { memberNote } from '../../lib/labels'
@@ -34,6 +36,8 @@ export interface PeriodColumn {
 
 export interface MemberRow {
   member: DashboardMember
+  /** Shown after the name, e.g. a "Not planned" badge. */
+  badge?: ReactNode
   /** One value per column, in column order. */
   hours: number[]
   total: number
@@ -74,6 +78,7 @@ export function MemberHoursTable({
             <tr key={row.member.id}>
               <th scope="row" className="max-w-36 font-normal">
                 <MemberName member={row.member} />
+                {row.badge && <div className="mt-1">{row.badge}</div>}
               </th>
               {columns.map((c, i) => {
                 const h = row.hours[i] ?? 0

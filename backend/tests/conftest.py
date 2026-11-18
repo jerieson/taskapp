@@ -8,11 +8,13 @@
 - `client` is an HTTP client for the app whose requests use that same session.
   `new_client()` makes more of them (e.g. a second browser for session tests).
 - `settings_override(**changes)` changes app settings for one test.
+- `set_now(moment)` moves the clock used for the weekly planning deadline.
 """
 
 import asyncio
 import os
 from collections.abc import AsyncIterator, Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,7 @@ from sqlalchemy import URL, make_url, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.core import weeks
 from app.core.config import Settings, get_settings
 from app.db.engine import get_engine, get_sessionmaker
 from app.db.session import get_session
@@ -146,3 +149,14 @@ def settings_override(app: FastAPI) -> Callable[..., Settings]:
         return settings
 
     return _override
+
+
+@pytest.fixture
+def set_now(monkeypatch: pytest.MonkeyPatch) -> Callable[[datetime], None]:
+    """Fix the current time seen by the planning deadline (an aware datetime)."""
+
+    def _set(moment: datetime) -> None:
+        assert moment.tzinfo is not None, "use an aware datetime"
+        monkeypatch.setattr(weeks, "utcnow", lambda: moment)
+
+    return _set

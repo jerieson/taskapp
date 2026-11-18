@@ -22,12 +22,16 @@ Rules enforced here:
 - The author's total actual hours on one date may not exceed 24, and separately their
   total planned hours.
 - Only active values can be chosen; on update the current value may stay.
-- For now a row is "planned" exactly when it has planned hours (the weekly planning
-  deadline replaces this rule later).
+- Weekly planning (app/core/weeks.py): a new row is planned when its week is still
+  open, unplanned otherwise. In a locked week planned hours cannot be set, changed or
+  cleared and planned rows cannot be deleted (422 `week_locked`). Admins are exempt
+  and are the only ones who can set `is_planned`.
 """
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -35,8 +39,10 @@ from sqlalchemy import Row, Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, aliased
 
+from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.pagination import Page, PaginationParams
+from app.core.weeks import PlanWeek, monday_of, plan_week
 from app.models import (
     Activity,
     ActivityGroupMember,
@@ -52,6 +58,9 @@ from app.models import (
 )
 from app.schemas.prod_logs import (
     MAX_DAILY_HOURS,
+    CopyDayResult,
+    CopyLogs,
+    CopyResult,
     PlainRef,
     ProdLogCreate,
     ProdLogListItem,
@@ -196,6 +205,17 @@ async def _default_work_setup(db: AsyncSession) -> int:
             "No default work set-up is set. Ask an admin to set one, or choose a work set-up.",
         )
     return row_id
+
+
+def _week_locked(week: PlanWeek, field: str | None, what: str) -> AppError:
+    deadline = week.deadline.strftime("%a %d %b, %H:%M")
+    message = f"Planning for the week of {week.start:%d %b} closed on {deadline}: {what}"
+    return AppError(422, "week_locked", message, fields={field: message} if field else None)
+
+
+def _admin_only_planned() -> AppError:
+    message = "Only an admin can change Planned/Unplanned"
+    return AppError(403, "forbidden", message, fields={"is_planned": message})
 
 
 def _hours_required() -> AppError:
@@ -406,8 +426,16 @@ async def get_log(db: AsyncSession, user: User, log_id: int) -> ProdLogOut:
     return await _load(db, user, log_id)
 
 
-async def create_log(db: AsyncSession, user: User, data: ProdLogCreate) -> ProdLogOut:
+async def create_log(
+    db: AsyncSession, user: User, data: ProdLogCreate, settings: Settings
+) -> ProdLogOut:
     sent = data.model_fields_set
+    is_admin = user.role == Role.ADMIN
+    if data.is_planned is not None and not is_admin:
+        raise _admin_only_planned()
+    week = plan_week(data.log_date, settings)
+    if data.planned_hours is not None and not week.is_open and not is_admin:
+        raise _week_locked(week, "planned_hours", "log the actual hours as unplanned work")
     project_id, category_id = data.project_id, data.category_id
     if data.task_id is not None:
         task = await _check_task(db, data.task_id, user.id)
@@ -444,7 +472,7 @@ async def create_log(db: AsyncSession, user: User, data: ProdLogCreate) -> ProdL
         project_id=project_id,
         category_id=category_id,
         om_project_id=data.om_project_id,
-        is_planned=data.planned_hours is not None,
+        is_planned=week.is_open if data.is_planned is None else data.is_planned,
         planned_hours=data.planned_hours,
         hours_spent=data.hours_spent,
         title=data.title or None,
@@ -464,9 +492,30 @@ _REF_FIELDS = ("work_setup_id", "category_id", "project_id", "activity_id", "om_
 _TEXT_FIELDS = ("title", "description", "deviation_reason")
 
 
-async def update_log(db: AsyncSession, user: User, log_id: int, data: ProdLogUpdate) -> ProdLogOut:
+def _check_planned_lock(log: ProdLog, data: ProdLogUpdate, settings: Settings) -> None:
+    """Planned hours on a date in a locked week stay as they are: they cannot be set,
+    changed or cleared there, nor moved to or from such a date."""
+    sent = data.model_fields_set
+    new_date = data.log_date if "log_date" in sent and data.log_date else log.log_date
+    new_planned = data.planned_hours if "planned_hours" in sent else log.planned_hours
+    if new_planned == log.planned_hours and new_date == log.log_date:
+        return
+    # Existing planned hours leave (or change on) their date; new ones arrive on theirs.
+    for day, planned in ((log.log_date, log.planned_hours), (new_date, new_planned)):
+        week = plan_week(day, settings)
+        if planned is not None and not week.is_open:
+            raise _week_locked(week, "planned_hours", "planned hours can no longer change")
+
+
+async def update_log(
+    db: AsyncSession, user: User, log_id: int, data: ProdLogUpdate, settings: Settings
+) -> ProdLogOut:
     log = await _get_writable(db, user, log_id)
     sent = data.model_fields_set
+    if user.role != Role.ADMIN:
+        if data.is_planned is not None:
+            raise _admin_only_planned()
+        _check_planned_lock(log, data, settings)
 
     # Validate the final values before touching the row, so a rejected update leaves
     # nothing half-applied in the session.
@@ -486,13 +535,19 @@ async def update_log(db: AsyncSession, user: User, log_id: int, data: ProdLogUpd
     if final("planned_hours") is None and final("hours_spent") is None:
         raise _hours_required()
 
-    for field in ("log_date", "planned_hours", "hours_spent", "task_id", *_REF_FIELDS):
+    for field in (
+        "log_date",
+        "planned_hours",
+        "hours_spent",
+        "task_id",
+        "is_planned",
+        *_REF_FIELDS,
+    ):
         if field in sent:
             setattr(log, field, getattr(data, field))
     for field in _TEXT_FIELDS:
         if field in sent:
             setattr(log, field, getattr(data, field) or None)
-    log.is_planned = log.planned_hours is not None
 
     if sent & {"log_date", "hours_spent"}:
         await _check_daily_total(db, log, ProdLog.hours_spent, log.hours_spent, log.id)
@@ -505,8 +560,124 @@ async def update_log(db: AsyncSession, user: User, log_id: int, data: ProdLogUpd
     return await _load(db, user, log.id)
 
 
-async def delete_log(db: AsyncSession, user: User, log_id: int) -> None:
+async def delete_log(db: AsyncSession, user: User, log_id: int, settings: Settings) -> None:
     log = await _get_writable(db, user, log_id)
+    if log.is_planned and user.role != Role.ADMIN:
+        week = plan_week(log.log_date, settings)
+        if not week.is_open:
+            raise _week_locked(week, None, "planned rows can no longer be deleted")
     await db.delete(log)
     await db.commit()
     logger.info("prod_log_deleted", extra={"fields": {"log_id": log_id}})
+
+
+# ---------------------------------------------------------------- copy a plan
+
+
+async def _copyable(db: AsyncSession, log: ProdLog) -> bool:
+    """Every value on the row is active and the links still hold."""
+    if log.project_id is None:
+        return False
+    refs = {
+        "category_id": log.category_id,
+        "project_id": log.project_id,
+        "activity_id": log.activity_id,
+        "work_setup_id": log.work_setup_id,
+        "om_project_id": log.om_project_id,
+    }
+    try:
+        for field, value in refs.items():
+            if value is not None:
+                await check_ref(db, field, value, keep=None)
+        await _check_links(db, _links_of(log))
+    except AppError:
+        return False
+    return True
+
+
+async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Settings) -> CopyResult:
+    """Copy the caller's rows from a day or a week to days in open weeks, as planned rows.
+
+    A target day whose planned total would pass 24 hours is skipped as a whole. Rows
+    with an inactive or unlinked value are left out. All in one transaction.
+    """
+    for target in data.to_dates:
+        week = plan_week(target, settings)
+        if not week.is_open:
+            raise _week_locked(week, "to_dates", "copy into a week that is still open")
+
+    source_day = data.from_date or data.from_week or date.min  # the schema requires one
+    if data.from_date is not None:
+        start = end = source_day
+    else:
+        start = monday_of(source_day)
+        end = start + timedelta(days=6)
+    sources = (
+        await db.scalars(
+            select(ProdLog)
+            .where(ProdLog.user_id == user.id, ProdLog.log_date.between(start, end))
+            .order_by(ProdLog.log_date, ProdLog.created_at, ProdLog.id)
+        )
+    ).all()
+    if not sources:
+        message = "There are no rows to copy on the chosen day or week"
+        raise AppError(422, "nothing_to_copy", message)
+
+    usable = [log for log in sources if await _copyable(db, log)]
+    by_weekday: dict[int, list[ProdLog]] = defaultdict(list)
+    for log in usable:
+        by_weekday[log.log_date.weekday()].append(log)
+
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+        {"key": f"prod_logs:user:{user.id}"},
+    )
+    planned_on = dict(
+        (
+            await db.execute(
+                select(ProdLog.log_date, func.coalesce(func.sum(ProdLog.planned_hours), 0))
+                .where(ProdLog.user_id == user.id, ProdLog.log_date.in_(data.to_dates))
+                .group_by(ProdLog.log_date)
+            )
+        ).all()
+    )
+
+    days: list[CopyDayResult] = []
+    for target in sorted(data.to_dates):
+        rows = usable if data.from_date is not None else by_weekday.get(target.weekday(), [])
+        hours = [log.planned_hours or log.hours_spent or Decimal(0) for log in rows]
+        if not rows:
+            days.append(CopyDayResult(date=target, created=0, skipped_reason="nothing_to_copy"))
+            continue
+        if Decimal(planned_on.get(target, 0)) + sum(hours, Decimal(0)) > MAX_DAILY_HOURS:
+            days.append(
+                CopyDayResult(date=target, created=0, skipped_reason="daily_hours_exceeded")
+            )
+            continue
+        for log, planned in zip(rows, hours, strict=True):
+            db.add(_copy_of(log, user, target, planned))
+        days.append(CopyDayResult(date=target, created=len(rows), skipped_reason=None))
+
+    await db.commit()
+    created = sum(day.created for day in days)
+    logger.info("prod_logs_copied", extra={"fields": {"created": created}})
+    return CopyResult(created=created, days=days, skipped_rows=len(sources) - len(usable))
+
+
+def _copy_of(log: ProdLog, user: User, target: date, planned: Decimal) -> ProdLog:
+    return ProdLog(
+        user_id=user.id,
+        team_id=user.team_id,
+        task_id=log.task_id,
+        log_date=target,
+        work_setup_id=log.work_setup_id,
+        activity_id=log.activity_id,
+        project_id=log.project_id,
+        category_id=log.category_id,
+        om_project_id=log.om_project_id,
+        is_planned=True,
+        planned_hours=planned,
+        hours_spent=None,
+        title=log.title,
+        updated_by=user.id,
+    )

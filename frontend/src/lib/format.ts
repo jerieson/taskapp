@@ -89,3 +89,27 @@ export function formatDayRange(from: string, to: string): string {
   const sameYear = from.slice(0, 4) === to.slice(0, 4)
   return `${sameYear ? formatShortDay(from) : formatDay(from)} – ${formatDay(to)}`
 }
+
+const deadlineFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+/** A UTC timestamp with weekday and time, e.g. "Fri, Nov 20, 6:30 PM". */
+export function formatDeadline(iso: string): string {
+  return deadlineFormat.format(new Date(iso))
+}
+
+/** A positive duration as "2 d 4 h", "3 h 15 min" or "12 min". */
+export function formatTimeLeft(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / 60_000))
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
+  const mins = minutes % 60
+  if (days > 0) return `${days} d ${hours} h`
+  if (hours > 0) return `${hours} h ${mins} min`
+  return `${mins} min`
+}

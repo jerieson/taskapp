@@ -1,7 +1,8 @@
 """Prod log fields from the team's sheet: linked dropdowns, work set-up, planned and
 actual hours with separate daily caps, and the new list fields and filters."""
 
-from datetime import date, timedelta
+from collections.abc import Callable
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest
@@ -26,6 +27,13 @@ from tests.factories import (
 pytestmark = pytest.mark.anyio
 
 TODAY = date.today()
+
+
+@pytest.fixture(autouse=True)
+def _week_open(set_now: Callable[[datetime], None]) -> None:
+    """Planned hours are only accepted in open weeks: put the clock two weeks back."""
+    monday_before = TODAY - timedelta(days=TODAY.weekday() + 14)
+    set_now(datetime.combine(monday_before, time(12), tzinfo=UTC))
 
 
 def _body(refs: LinkedRefs, **kw: object) -> dict[str, object]:
@@ -81,7 +89,8 @@ async def test_minimal_row_gets_default_work_setup_and_no_title(
     assert default is not None
     body = await _create(client, _body(refs))
     assert body["work_setup"]["id"] == default.id  # type: ignore[index]
-    assert (body["title"], body["planned_hours"], body["is_planned"]) == (None, None, False)
+    # Planned (the week is open) even without planned hours.
+    assert (body["title"], body["planned_hours"], body["is_planned"]) == (None, None, True)
     assert body["om_project"] is None
 
 
@@ -115,7 +124,8 @@ async def test_hours_required(client: AsyncClient, db: AsyncSession) -> None:
     assert resp.json()["error"]["code"] == "hours_required"
     resp = await client.patch(f"/api/logs/{log.id}", json={"hours_spent": None, "planned_hours": 2})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["is_planned"] is True
+    # Planned/unplanned is set when the row is created and does not follow the hours.
+    assert resp.json()["is_planned"] is False
 
 
 async def test_planned_hours_validation(client: AsyncClient, db: AsyncSession) -> None:

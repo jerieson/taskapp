@@ -142,6 +142,10 @@ class TeamMemberOut(BaseModel):
 class ProdLogCreate(BaseModel):
     """A row needs planned hours, actual hours, or both.
 
+    Planned/unplanned is set by the server: a row is planned when its week is still
+    open (before the Friday deadline). In a locked week only an admin can enter planned
+    hours (422 `week_locked`). Only an admin can send `is_planned` to override it.
+
     The linked dropdowns must fit together: the project is linked to the category, the
     activity is in the project's activity group, and an O&M project is only allowed when
     the category offers it. When `task_id` is given and project/category are omitted,
@@ -163,6 +167,8 @@ class ProdLogCreate(BaseModel):
     title: Title | None = None
     description: Description | None = None
     deviation_reason: DeviationReason | None = None
+    is_planned: bool | None = None
+    """Admin only. Omitted: set from the planning deadline."""
 
 
 class ProdLogUpdate(BaseModel):
@@ -170,6 +176,9 @@ class ProdLogUpdate(BaseModel):
 
     A value that has been deactivated (or a link the admin has since removed) may be
     kept but not newly chosen. The row must keep planned hours, actual hours, or both.
+    Planned hours cannot be set, changed or cleared on a date in a locked week (also by
+    moving the row to or from such a date), except by an admin (422 `week_locked`).
+    Actual hours, remarks and the reason for deviation can change at any time.
     """
 
     log_date: date | None = None
@@ -184,11 +193,73 @@ class ProdLogUpdate(BaseModel):
     title: Title | None = None
     description: Description | None = None
     deviation_reason: DeviationReason | None = None
+    is_planned: bool | None = None
+    """Admin only."""
 
     @model_validator(mode="after")
     def _required_not_null(self) -> Self:
-        required = ("log_date", "work_setup_id", "category_id", "project_id", "activity_id")
+        required = (
+            "log_date",
+            "work_setup_id",
+            "category_id",
+            "project_id",
+            "activity_id",
+            "is_planned",
+        )
         for name in required:
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} cannot be null")
         return self
+
+
+# ---------------------------------------------------------------- copy a plan
+
+MAX_COPY_DAYS = 14
+
+
+class CopyLogs(BaseModel):
+    """Copy the caller's rows from one day, or one week, to days in open weeks.
+
+    `from_date`: every row of that day is copied to each of `to_dates`.
+    `from_week` (any date in the source week): each row goes to the target date with
+    the same weekday (Monday's rows to the Monday in `to_dates`, and so on).
+    Copies are planned rows: planned hours = the source's planned hours, else its actual
+    hours; no actual hours. Category, project, activity, O&M project, work set-up, task
+    and note are kept.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_date: date | None = None
+    from_week: date | None = None
+    to_dates: list[date] = Field(min_length=1, max_length=MAX_COPY_DAYS)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> Self:
+        if (self.from_date is None) == (self.from_week is None):
+            raise ValueError("Send either from_date or from_week")
+        if len(set(self.to_dates)) != len(self.to_dates):
+            raise ValueError("to_dates must not repeat a date")
+        if self.from_date is not None and self.from_date in self.to_dates:
+            raise ValueError("to_dates must not include from_date")
+        return self
+
+
+class CopyDayResult(BaseModel):
+    date: date
+    created: int
+    """Rows created on this date."""
+    skipped_reason: str | None
+    """`daily_hours_exceeded` (the copies would take the day over 24 planned hours, so
+    none were made) or `nothing_to_copy` (no source rows for this date); null when rows
+    were created."""
+
+
+class CopyResult(BaseModel):
+    created: int
+    """Rows created in total."""
+    days: list[CopyDayResult]
+    """One entry per target date, in date order."""
+    skipped_rows: int
+    """Source rows left out because a value on them is inactive or no longer linked
+    (or they have no project)."""

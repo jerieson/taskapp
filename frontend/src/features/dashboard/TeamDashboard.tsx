@@ -3,7 +3,8 @@
  * member / project / category and task counts per member for a date range. Used by
  * /team/dashboard and the admin Overview tab. Week and range live in the URL.
  *
- * Hours follow the team snapshot on each log; task numbers are counts only.
+ * Hours follow the team snapshot on each log; task numbers are counts only. "Next
+ * week's plan" shows each member's planned hours per day and who has not planned.
  */
 import { useState, type ReactNode } from 'react'
 
@@ -17,6 +18,7 @@ import {
   useTeamTaskCounts,
   type TeamTaskCounts,
 } from '../../api/dashboard'
+import { useTeamPlanningStatus } from '../../api/planning'
 import AsyncState from '../../components/AsyncState'
 import DataTable, { type Column } from '../../components/DataTable'
 import DateRangePicker from '../../components/DateRangePicker'
@@ -26,12 +28,14 @@ import { SkeletonChart } from '../../components/Skeleton'
 import { useDateRangeParam, useWeekParam } from '../../lib/dateRange'
 import {
   formatDay,
+  formatDayRange,
   formatDayWithWeekday,
   formatHours,
   formatShortDay,
   formatWeekday,
 } from '../../lib/format'
 import { memberNote } from '../../lib/labels'
+import { DeadlineCountdown } from '../today/PlanningParts'
 import { ChartCard, NoHours, SectionTitle, WeekNav } from './ChartParts'
 import HoursBarChart from './HoursBarChart'
 import HoursPerDayChart from './HoursPerDayChart'
@@ -170,6 +174,64 @@ function HoursPerWeekCard({ teamId }: { teamId: number }) {
   )
 }
 
+function NextWeekPlanCard({ teamId }: { teamId: number }) {
+  const plan = useTeamPlanningStatus(teamId)
+  const notPlanned = plan.data?.members.filter((m) => !m.has_planned).length ?? 0
+  return (
+    <ChartCard
+      title="Next week’s plan"
+      aside={
+        plan.data &&
+        (notPlanned ? `${notPlanned} not planned` : plan.data.members.length ? 'All planned' : '')
+      }
+      toolbar={
+        plan.data && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-sm font-medium">
+              {formatDayRange(plan.data.week_start, plan.data.week_end)}
+            </span>
+            <DeadlineCountdown week={plan.data} />
+          </div>
+        )
+      }
+    >
+      <AsyncState
+        query={plan}
+        isEmpty={plan.data?.members.length === 0}
+        skeleton={chartSkeleton}
+        empty={<EmptyState size="compact" icon={<UsersIcon />} title="No active members" />}
+      >
+        {() => {
+          const data = plan.data!
+          return (
+            <MemberHoursTable
+              caption="Planned hours per day for next week, by member"
+              columns={data.members[0]!.days.map((d) => ({
+                key: d.date,
+                label: formatWeekday(d.date),
+                title: formatDayWithWeekday(d.date),
+              }))}
+              rows={data.members.map((m) => ({
+                member: m.member,
+                badge: !m.has_planned && (
+                  <span className="badge badge-sm border-warning bg-warning text-warning-content">
+                    Not planned
+                  </span>
+                ),
+                hours: m.days.map((d) => d.planned_hours),
+                total: m.total,
+              }))}
+              totals={data.members[0]!.days.map((_, i) =>
+                data.members.reduce((sum, m) => sum + (m.days[i]?.planned_hours ?? 0), 0),
+              )}
+            />
+          )
+        }}
+      </AsyncState>
+    </ChartCard>
+  )
+}
+
 type MemberCounts = TeamTaskCounts['items'][number]
 
 const TASK_COLUMNS: Column<MemberCounts>[] = [
@@ -215,6 +277,11 @@ export default function TeamDashboard({ teamId }: { teamId: number }) {
 
   return (
     <div className="flex flex-col gap-8">
+      <section aria-labelledby="team-plan" className="flex flex-col gap-4">
+        <SectionTitle id="team-plan">Planning</SectionTitle>
+        <NextWeekPlanCard teamId={teamId} />
+      </section>
+
       <section aria-labelledby="team-time" className="flex flex-col gap-4">
         <SectionTitle id="team-time">Hours over time</SectionTitle>
         <div className="grid gap-4 xl:grid-cols-2">

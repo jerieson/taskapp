@@ -10,8 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    DailyPlan,
-    DailyPlanItem,
     Invite,
     Process,
     ProcessRun,
@@ -137,22 +135,6 @@ async def test_deleting_task_nulls_prod_log_task_id(db: AsyncSession) -> None:
     await db.refresh(log)
 
     assert log.task_id is None
-
-
-async def test_deleting_task_cascades_daily_plan_items(db: AsyncSession) -> None:
-    task = await make_task(db)
-    plan = DailyPlan(user_id=task.user_id, plan_date=task.created_at.date())
-    db.add(plan)
-    await db.flush()
-    db.add(DailyPlanItem(daily_plan_id=plan.id, task_id=task.id, item_order=1))
-    await db.flush()
-
-    await db.execute(delete(Task).where(Task.id == task.id))
-
-    remaining = await db.scalars(
-        select(DailyPlanItem).where(DailyPlanItem.daily_plan_id == plan.id)
-    )
-    assert remaining.all() == []
 
 
 async def test_deleting_team_with_users_fails(db: AsyncSession) -> None:

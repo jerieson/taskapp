@@ -8,8 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    DailyPlan,
-    DailyPlanItem,
     Priority,
     Process,
     ProcessRun,
@@ -282,17 +280,10 @@ async def test_update_rejects_null_required(
 # ---------------------------------------------------------------- delete
 
 
-async def test_delete_keeps_logs_and_drops_plan_items(
-    client: AsyncClient, db: AsyncSession
-) -> None:
+async def test_delete_keeps_logs(client: AsyncClient, db: AsyncSession) -> None:
     user = await login_as(client, db)
     task = await make_task(db, user=user)
     log = await make_log(db, user=user, task=task)
-    plan = DailyPlan(user_id=user.id, plan_date=date.today())
-    db.add(plan)
-    await db.flush()
-    db.add(DailyPlanItem(daily_plan_id=plan.id, task_id=task.id, item_order=1))
-    await db.flush()
 
     assert (await client.delete(f"/api/tasks/{task.id}")).status_code == 204
     db.expunge_all()
@@ -300,8 +291,6 @@ async def test_delete_keeps_logs_and_drops_plan_items(
     kept = await db.get(ProdLog, log.id)
     assert kept is not None
     assert kept.task_id is None
-    items = await db.scalars(select(DailyPlanItem).where(DailyPlanItem.daily_plan_id == plan.id))
-    assert items.all() == []
 
 
 # ---------------------------------------------------------------- list

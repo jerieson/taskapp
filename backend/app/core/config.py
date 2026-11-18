@@ -1,3 +1,4 @@
+from datetime import time
 from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated
@@ -36,8 +37,10 @@ class Settings(BaseSettings):
     # Dates ("today", overdue, dashboard weeks) are computed in this time zone.
     app_timezone: str = "UTC"
 
-    # Planned hours in a working day (daily plan total, AI plan trimming).
+    # Hours in a working day (planned totals above it are shown as a warning).
     workday_hours: Decimal = Field(Decimal(8), gt=0, le=24)
+    # Next week's plan is due at this time on Friday (APP_TIMEZONE).
+    plan_deadline_time: time = time(18, 30)
 
     # AI. Empty LLM_PROVIDER = AI features disabled (they return 503). When it is set,
     # the app refuses to start without a matching adapter, a model and an API key.

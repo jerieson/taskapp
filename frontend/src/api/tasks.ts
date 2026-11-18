@@ -59,15 +59,14 @@ export function useTaskOptions(openOnly = true) {
 }
 
 /**
- * Daily plans and process runs embed their tasks (and run progress and status follow
- * task status), and the dashboard counts them, so they are refreshed with the task lists.
+ * Process runs embed their tasks (and run progress and status follow task status), and
+ * the dashboard counts them, so they are refreshed with the task lists.
  */
 function useInvalidateTasks() {
   const queryClient = useQueryClient()
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: taskKeys.all }),
-      queryClient.invalidateQueries({ queryKey: ['plans'] }),
       queryClient.invalidateQueries({ queryKey: ['runs'] }),
       queryClient.invalidateQueries({ queryKey: ['processes'] }),
       queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
@@ -95,12 +94,11 @@ export function useDeleteTask() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/tasks/${id}`),
-    // Logs linked to the task lose the link; plans drop it; a run may complete.
+    // Logs linked to the task lose the link; a run may complete.
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: taskKeys.all }),
         queryClient.invalidateQueries({ queryKey: ['logs'] }),
-        queryClient.invalidateQueries({ queryKey: ['plans'] }),
         queryClient.invalidateQueries({ queryKey: ['runs'] }),
         queryClient.invalidateQueries({ queryKey: ['processes'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),

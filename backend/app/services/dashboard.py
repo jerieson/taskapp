@@ -21,6 +21,7 @@ from sqlalchemy import Date, DateTime, and_, cast, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.weeks import monday_of
 from app.models import Activity, Category, ProdLog, Project, Status, Task, User
 from app.schemas.dashboard import (
     WEEKS_IN_TREND,
@@ -66,10 +67,6 @@ def team_logs(team_id: int) -> LogScope:
 def _actual(scope: LogScope) -> LogScope:
     """Only rows with actual hours."""
     return and_(scope, ProdLog.hours_spent.is_not(None))
-
-
-def monday_of(day: date) -> date:
-    return day - timedelta(days=day.weekday())
 
 
 def _hours_sum() -> ColumnElement[Decimal]:
@@ -307,7 +304,7 @@ def _member_out(user: User, team_id: int) -> TeamMemberOut:
     )
 
 
-async def _members(
+async def team_members(
     db: AsyncSession, team_id: int, with_hours: Iterable[int]
 ) -> list[TeamMemberOut]:
     """Active current members, plus anyone with hours in the period, by username."""
@@ -351,7 +348,7 @@ async def team_hours_per_day(
             days=[DayHours(date=day, hours=by_user[member.id].get(day, ZERO)) for day in days],
             total=sum(by_user[member.id].values(), ZERO),
         )
-        for member in await _members(db, team_id, by_user)
+        for member in await team_members(db, team_id, by_user)
     ]
     return TeamHoursPerDay(
         week_start=days[0],
@@ -384,7 +381,7 @@ async def team_hours_per_week(
             ],
             total=sum(by_user[member.id].values(), ZERO),
         )
-        for member in await _members(db, team_id, by_user)
+        for member in await team_members(db, team_id, by_user)
     ]
     return TeamHoursPerWeek(
         weeks=[WeekHours(week_start=week, hours=team[week]) for week in weeks],
@@ -402,7 +399,7 @@ async def team_hours_by_member(
         .group_by(ProdLog.user_id)
     )
     by_user: dict[int, Decimal] = dict(rows.all())
-    members = await _members(db, team_id, by_user)
+    members = await team_members(db, team_id, by_user)
     items = sorted(
         (MemberHours(member=m, hours=by_user.get(m.id, ZERO)) for m in members),
         key=lambda item: -item.hours,  # stable: ties keep username order
@@ -441,7 +438,7 @@ async def team_task_counts(
 ) -> TeamTaskCounts:
     """Counts per active current member. Never selects task titles or descriptions."""
     await check_team_access(db, user, team_id)
-    members = await _members(db, team_id, ())
+    members = await team_members(db, team_id, ())
     rows = await db.execute(
         select(Task.user_id, *_task_count_columns(rng, today, tz_name))
         .select_from(Task)

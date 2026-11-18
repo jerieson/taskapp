@@ -625,9 +625,34 @@ export interface paths {
         put?: never;
         /**
          * Create Log
-         * @description Rejected (422 `daily_hours_exceeded`) if the day would total more than 24 hours.
+         * @description Rejected (422 `daily_hours_exceeded`) if the day would total more than 24 actual
+         *     or 24 planned hours, and (422 `week_locked`) for planned hours in a locked week.
          */
         post: operations["create_log_api_logs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/logs/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Logs
+         * @description Copy your rows from a day or a week into days of open weeks, as planned rows.
+         *
+         *     Every target date must be in an open week (422 `week_locked`). Days that would pass
+         *     24 planned hours, and rows with inactive values, are skipped and reported. No source
+         *     rows: 422 `nothing_to_copy`.
+         */
+        post: operations["copy_logs_api_logs_copy_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -645,7 +670,10 @@ export interface paths {
         get: operations["get_log_api_logs__log_id__get"];
         put?: never;
         post?: never;
-        /** Delete Log */
+        /**
+         * Delete Log
+         * @description Planned rows in a locked week can only be deleted by an admin (422 `week_locked`).
+         */
         delete: operations["delete_log_api_logs__log_id__delete"];
         options?: never;
         head?: never;
@@ -656,27 +684,7 @@ export interface paths {
         patch: operations["update_log_api_logs__log_id__patch"];
         trace?: never;
     };
-    "/api/plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Open Plan
-         * @description Get or create: the caller's plan for `plan_date`, created empty if needed.
-         */
-        post: operations["open_plan_api_plans_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/by-date/{plan_date}": {
+    "/api/planning/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -684,10 +692,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Plan By Date
-         * @description The caller's plan for a date; 404 if none has been created yet.
+         * Own Status
+         * @description Your planned hours per day for a week, its deadline, and whether to show the
+         *     planning reminder.
          */
-        get: operations["get_plan_by_date_api_plans_by_date__plan_date__get"];
+        get: operations["own_status_api_planning_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -696,86 +705,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plans/{plan_id}": {
+    "/api/teams/{team_id}/planning/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Plan */
-        get: operations["get_plan_api_plans__plan_id__get"];
+        /**
+         * Team Status
+         * @description Each member's planned hours per day for a week and whether they have planned.
+         */
+        get: operations["team_status_api_teams__team_id__planning_status_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/plans/{plan_id}/items": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Replace Items
-         * @description Replace all items in one transaction (all or nothing).
-         */
-        put: operations["replace_items_api_plans__plan_id__items_put"];
-        /**
-         * Add Item
-         * @description Append one of the caller's open tasks. 409 `duplicate_task` if already planned.
-         */
-        post: operations["add_item_api_plans__plan_id__items_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/{plan_id}/order": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Reorder Items
-         * @description Set the item order. `item_ids` must list every item of the plan.
-         */
-        put: operations["reorder_items_api_plans__plan_id__order_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plans/{plan_id}/items/{item_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Item */
-        delete: operations["remove_item_api_plans__plan_id__items__item_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Item
-         * @description Set or clear an item's suggested hours.
-         */
-        patch: operations["update_item_api_plans__plan_id__items__item_id__patch"];
         trace?: never;
     };
     "/api/processes": {
@@ -2163,33 +2110,50 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** CopyDayResult */
+        CopyDayResult: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Created */
+            created: number;
+            /** Skipped Reason */
+            skipped_reason: string | null;
+        };
+        /**
+         * CopyLogs
+         * @description Copy the caller's rows from one day, or one week, to days in open weeks.
+         *
+         *     `from_date`: every row of that day is copied to each of `to_dates`.
+         *     `from_week` (any date in the source week): each row goes to the target date with
+         *     the same weekday (Monday's rows to the Monday in `to_dates`, and so on).
+         *     Copies are planned rows: planned hours = the source's planned hours, else its actual
+         *     hours; no actual hours. Category, project, activity, O&M project, work set-up, task
+         *     and note are kept.
+         */
+        CopyLogs: {
+            /** From Date */
+            from_date?: string | null;
+            /** From Week */
+            from_week?: string | null;
+            /** To Dates */
+            to_dates: string[];
+        };
+        /** CopyResult */
+        CopyResult: {
+            /** Created */
+            created: number;
+            /** Days */
+            days: components["schemas"]["CopyDayResult"][];
+            /** Skipped Rows */
+            skipped_rows: number;
+        };
         /** CsrfOut */
         CsrfOut: {
             /** Csrf Token */
             csrf_token: string;
-        };
-        /** DailyPlanOut */
-        DailyPlanOut: {
-            /** Id */
-            id: number;
-            /**
-             * Plan Date
-             * Format: date
-             */
-            plan_date: string;
-            /** Ai Generated */
-            ai_generated: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Items */
-            items: components["schemas"]["PlanItemOut"][];
-            /** Total Hours */
-            total_hours: number;
-            /** Workday Hours */
-            workday_hours: number;
         };
         /** DataTabImportOut */
         DataTabImportOut: {
@@ -2666,6 +2630,16 @@ export interface components {
             /** Hours */
             hours: number;
         };
+        /** MemberPlan */
+        MemberPlan: {
+            member: components["schemas"]["TeamMemberOut"];
+            /** Days */
+            days: components["schemas"]["PlanDay"][];
+            /** Total */
+            total: number;
+            /** Has Planned */
+            has_planned: boolean;
+        };
         /** MemberTaskCounts */
         MemberTaskCounts: {
             member: components["schemas"]["TeamMemberOut"];
@@ -2960,56 +2934,48 @@ export interface components {
             /** Is Active */
             is_active: boolean;
         };
-        /**
-         * PlanItemCreate
-         * @description The task must be one of the caller's own open tasks, not already in the plan.
-         */
-        PlanItemCreate: {
-            /** Task Id */
-            task_id: number;
-            /** Suggested Hours */
-            suggested_hours?: (number | string) | null;
-        };
-        /** PlanItemOut */
-        PlanItemOut: {
-            /** Id */
-            id: number;
-            /** Item Order */
-            item_order: number;
-            /** Suggested Hours */
-            suggested_hours: number | null;
-            /** Ai Reason */
-            ai_reason: string | null;
-            task: components["schemas"]["TaskOut"];
-        };
-        /** PlanItemUpdate */
-        PlanItemUpdate: {
-            /** Suggested Hours */
-            suggested_hours: (number | string) | null;
-        };
-        /**
-         * PlanItemsReplace
-         * @description The plan's complete new item list, in order. Replaces all existing items.
-         */
-        PlanItemsReplace: {
-            /** Items */
-            items: components["schemas"]["PlanItemCreate"][];
-        };
-        /** PlanOpen */
-        PlanOpen: {
+        /** PlanDay */
+        PlanDay: {
             /**
-             * Plan Date
+             * Date
              * Format: date
              */
-            plan_date: string;
+            date: string;
+            /** Planned Hours */
+            planned_hours: number;
         };
         /**
-         * PlanOrder
-         * @description Every item of the plan, in the new order.
+         * PlanningStatus
+         * @description The caller's own plan for the week.
          */
-        PlanOrder: {
-            /** Item Ids */
-            item_ids: number[];
+        PlanningStatus: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Is Open */
+            is_open: boolean;
+            /** Workday Hours */
+            workday_hours: number;
+            /** Days */
+            days: components["schemas"]["PlanDay"][];
+            /** Total */
+            total: number;
+            /** Has Planned */
+            has_planned: boolean;
+            /** Show Reminder */
+            show_reminder: boolean;
         };
         /** PriorityOut */
         PriorityOut: {
@@ -3131,6 +3097,10 @@ export interface components {
          * ProdLogCreate
          * @description A row needs planned hours, actual hours, or both.
          *
+         *     Planned/unplanned is set by the server: a row is planned when its week is still
+         *     open (before the Friday deadline). In a locked week only an admin can enter planned
+         *     hours (422 `week_locked`). Only an admin can send `is_planned` to override it.
+         *
          *     The linked dropdowns must fit together: the project is linked to the category, the
          *     activity is in the project's activity group, and an O&M project is only allowed when
          *     the category offers it. When `task_id` is given and project/category are omitted,
@@ -3165,6 +3135,8 @@ export interface components {
             description?: string | null;
             /** Deviation Reason */
             deviation_reason?: string | null;
+            /** Is Planned */
+            is_planned?: boolean | null;
         };
         /** ProdLogListItem */
         ProdLogListItem: {
@@ -3264,6 +3236,9 @@ export interface components {
          *
          *     A value that has been deactivated (or a link the admin has since removed) may be
          *     kept but not newly chosen. The row must keep planned hours, actual hours, or both.
+         *     Planned hours cannot be set, changed or cleared on a date in a locked week (also by
+         *     moving the row to or from such a date), except by an admin (422 `week_locked`).
+         *     Actual hours, remarks and the reason for deviation can change at any time.
          */
         ProdLogUpdate: {
             /** Log Date */
@@ -3290,6 +3265,8 @@ export interface components {
             description?: string | null;
             /** Deviation Reason */
             deviation_reason?: string | null;
+            /** Is Planned */
+            is_planned?: boolean | null;
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -3703,6 +3680,35 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * TeamPlanningStatus
+         * @description Each member's planned hours (by the team snapshot on each row). Members are the
+         *     team's active current members plus anyone with planned rows under the team that
+         *     week, ordered by username.
+         */
+        TeamPlanningStatus: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Is Open */
+            is_open: boolean;
+            /** Workday Hours */
+            workday_hours: number;
+            /** Members */
+            members: components["schemas"]["MemberPlan"][];
         };
         /** TeamRef */
         TeamRef: {
@@ -5464,6 +5470,48 @@ export interface operations {
             };
         };
     };
+    copy_logs_api_logs_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyLogs"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyResult"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_log_api_logs__log_id__get: {
         parameters: {
             query?: never;
@@ -5586,18 +5634,16 @@ export interface operations {
             };
         };
     };
-    open_plan_api_plans_post: {
+    own_status_api_planning_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                week?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanOpen"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5605,7 +5651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
+                    "application/json": components["schemas"]["PlanningStatus"];
                 };
             };
             /** @description Client error */
@@ -5628,12 +5674,14 @@ export interface operations {
             };
         };
     };
-    get_plan_by_date_api_plans_by_date__plan_date__get: {
+    team_status_api_teams__team_id__planning_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                week?: string | null;
+            };
             header?: never;
             path: {
-                plan_date: string;
+                team_id: number;
             };
             cookie?: never;
         };
@@ -5645,263 +5693,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_plan_api_plans__plan_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    replace_items_api_plans__plan_id__items_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanItemsReplace"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    add_item_api_plans__plan_id__items_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanItemCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    reorder_items_api_plans__plan_id__order_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanOrder"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    remove_item_api_plans__plan_id__items__item_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-                item_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_item_api_plans__plan_id__items__item_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-                item_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanItemUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DailyPlanOut"];
+                    "application/json": components["schemas"]["TeamPlanningStatus"];
                 };
             };
             /** @description Client error */

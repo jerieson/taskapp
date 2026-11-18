@@ -50,6 +50,19 @@ export function useLogs(filters: LogFilters, offset: number) {
   })
 }
 
+/** Every own log in a date range (a day or a week), without paging. */
+export function useLogsInRange(from: string, to: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: logKeys.page({ date_from: from, date_to: to }, -1),
+    queryFn: () =>
+      api.get<Schemas['Page_ProdLogListItem_']>('/logs', {
+        query: { date_from: from, date_to: to, limit: ALL },
+      }),
+    select: (page) => page.items,
+  })
+}
+
 export function useTeamLogs(teamId: number | undefined, filters: TeamLogFilters, offset: number) {
   return useQuery({
     queryKey: logKeys.team(teamId ?? 0, filters, offset),
@@ -77,11 +90,12 @@ export function useTeamMembers(teamId: number | undefined) {
 
 function useInvalidateLogs() {
   const queryClient = useQueryClient()
-  // The dashboard's hour charts are computed from logs.
+  // The dashboard's hour charts and the planning status are computed from logs.
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: logKeys.all }),
       queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      queryClient.invalidateQueries({ queryKey: ['planning'] }),
     ])
 }
 
@@ -98,6 +112,18 @@ export function useUpdateLog() {
   return useMutation({
     mutationFn: ({ id, ...data }: ProdLogUpdate & { id: number }) =>
       api.patch<ProdLog>(`/logs/${id}`, data),
+    onSuccess: invalidate,
+  })
+}
+
+export type CopyLogs = Schemas['CopyLogs']
+export type CopyResult = Schemas['CopyResult']
+
+/** Copy a day's or a week's rows into days of an open week, as planned rows. */
+export function useCopyLogs() {
+  const invalidate = useInvalidateLogs()
+  return useMutation({
+    mutationFn: (data: CopyLogs) => api.post<CopyResult>('/logs/copy', data),
     onSuccess: invalidate,
   })
 }

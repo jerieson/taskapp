@@ -10,9 +10,12 @@
  * has since been deactivated or unlinked (the backend accepts that too).
  *
  * Choosing a task pre-fills the project and category from it (both stay editable).
- * A new log can also start from a task (`prefill`, e.g. "Log work" on the daily plan)
- * or from an AI draft (`draft`): required fields the AI left empty are highlighted
- * until filled in.
+ * A new log can also start from a date (and task) (`prefill`, e.g. "Add" on /today) or
+ * from an AI draft (`draft`): required fields the AI left empty are highlighted until
+ * filled in.
+ *
+ * Weekly planning: in a locked week (after the Friday deadline) planned hours are read
+ * only, except for admins. Admins can also override Planned/Unplanned.
  * Only the author can link a task: tasks are private, so an admin editing someone
  * else's log keeps the existing link and does not see the task list.
  */
@@ -22,16 +25,18 @@ import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
 import type { LogDraft, LogDraftField } from '../../api/ai'
+import { useCurrentUser } from '../../api/auth'
 import { errorMessage } from '../../api/client'
 import { useCreateLog, useUpdateLog, type ProdLog } from '../../api/logs'
 import { useLogOptions, type LogOptions } from '../../api/lookups'
+import { usePlanningStatus } from '../../api/planning'
 import { useTaskOptions, type Task } from '../../api/tasks'
 import ErrorAlert from '../../components/ErrorAlert'
 import { SparklesIcon } from '../../components/icons'
 import { InputField, SelectField, SubmitButton, TextareaField } from '../../components/FormField'
 import { SkeletonForm } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
-import { todayIso } from '../../lib/format'
+import { formatDeadline, todayIso } from '../../lib/format'
 import { applyFieldErrors } from '../../lib/forms'
 import { buildLinked, withCurrent, type Choice, type Linked } from './linkedOptions'
 
@@ -63,6 +68,8 @@ function makeSchema(requireProject: boolean) {
       title: z.string().trim().max(200, 'Use at most 200 characters'),
       description: z.string().trim().max(10000, 'Use at most 10000 characters'),
       deviation_reason: z.string().trim().max(2000, 'Use at most 2000 characters'),
+      /** Admin only: "" = automatic (new rows) / unchanged. */
+      is_planned: z.enum(['', 'planned', 'unplanned']),
     })
     .superRefine((data, ctx) => {
       if (!data.planned_hours && !data.hours_spent) {
@@ -88,6 +95,7 @@ const FIELDS = [
   'title',
   'description',
   'deviation_reason',
+  'is_planned',
 ] as const
 
 const idOrNull = (value: string) => (value ? Number(value) : null)
@@ -111,9 +119,8 @@ interface LogFormProps {
 }
 
 export interface LogPrefill {
-  task: Task
   logDate: string
-  hours?: number | null
+  task?: Task
 }
 
 /** Loads the dropdown options first, so every select is ready when the form mounts. */
@@ -144,6 +151,7 @@ function defaultValues(
     description: '',
     deviation_reason: '',
     planned_hours: '',
+    is_planned: '' as const,
   }
   if (draft) {
     // The backend only returns active values that fit the linked rules.
@@ -176,6 +184,7 @@ function defaultValues(
       title: log.title ?? '',
       description: log.description ?? '',
       deviation_reason: log.deviation_reason ?? '',
+      is_planned: log.is_planned ? 'planned' : 'unplanned',
     }
   }
   const task = prefill?.task
@@ -186,7 +195,7 @@ function defaultValues(
     ...empty,
     log_date: prefill?.logDate ?? todayIso(),
     work_setup_id: linked.defaultWorkSetupId,
-    hours_spent: prefill?.hours ? String(prefill.hours) : '',
+    hours_spent: '',
     category_id: category,
     project_id: linked.isProjectValid(taskProject, category) ? taskProject : '',
     activity_id: '',
@@ -213,6 +222,7 @@ function LogFormInner({
   options,
 }: LogFormProps & { options: LogOptions }) {
   const toast = useToast()
+  const isAdmin = useCurrentUser().data?.role === 'admin'
   const create = useCreateLog()
   const update = useUpdateLog()
   const mutation = log ? update : create
@@ -281,6 +291,18 @@ function LogFormInner({
   const workSetups = withCurrent(options.work_setups, log?.work_setup)
   const categories = withCurrent(options.categories, log?.category)
 
+  // ------------------------------------------------------------ planning lock
+
+  const logDate = values.log_date ?? ''
+  const week = usePlanningStatus(logDate || undefined, /^\d{4}-\d{2}-\d{2}$/.test(logDate))
+  const plannedLocked = !isAdmin && week.data !== undefined && !week.data.is_open
+  const lockHint = week.data && !week.data.is_open && (
+    <>
+      Planning for this week closed {formatDeadline(week.data.deadline)}.{' '}
+      {isAdmin ? 'You can still change it as an admin.' : 'Planned hours can no longer change.'}
+    </>
+  )
+
   const planned = values.planned_hours?.trim() ?? ''
   const actual = values.hours_spent?.trim() ?? ''
   const deviates = planned !== '' && actual !== '' && Number(planned) !== Number(actual)
@@ -316,6 +338,7 @@ function LogFormInner({
       // An old row without a project keeps it empty unless one is chosen.
       ...(data.project_id || !log ? { project_id: idOrNull(data.project_id) } : {}),
       ...(isOwn ? { task_id: idOrNull(data.task_id) } : {}),
+      ...(isAdmin && data.is_planned ? { is_planned: data.is_planned === 'planned' } : {}),
     }
     const options = {
       onSuccess: (saved: ProdLog) => {
@@ -371,8 +394,11 @@ function LogFormInner({
           step="0.25"
           min="0.25"
           max="24"
+          readOnly={plannedLocked}
+          className={plannedLocked ? 'bg-base-200' : ''}
           error={errors.planned_hours?.message}
           {...missing('hours', 'input')}
+          {...(lockHint ? { hint: lockHint } : {})}
           {...register('planned_hours')}
         />
         <InputField
@@ -440,7 +466,7 @@ function LogFormInner({
         <TaskSelect
           label="Task (optional)"
           current={
-            log?.task ?? (prefill ? { id: prefill.task.id, title: prefill.task.title } : null)
+            log?.task ?? (prefill?.task ? { id: prefill.task.id, title: prefill.task.title } : null)
           }
           error={errors.task_id?.message}
           {...register('task_id')}
@@ -465,6 +491,18 @@ function LogFormInner({
         error={errors.description?.message}
         {...register('description')}
       />
+      {isAdmin && (
+        <SelectField
+          label="Planned / Unplanned (admin)"
+          error={errors.is_planned?.message}
+          hint="Normally set from the planning deadline when the row is created."
+          {...register('is_planned')}
+        >
+          {!log && <option value="">Automatic</option>}
+          <option value="planned">Planned</option>
+          <option value="unplanned">Unplanned</option>
+        </SelectField>
+      )}
       {showDeviation && (
         <TextareaField
           label="Reason for deviation (optional)"
