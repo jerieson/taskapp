@@ -1180,7 +1180,8 @@ export interface paths {
         put?: never;
         /**
          * Log Draft
-         * @description Draft a prod log from free text. The text is sent to the configured AI provider.
+         * @description Draft prod log rows (one or many) from free text. The text is sent to the
+         *     configured AI provider. Nothing is saved: confirm with POST /api/logs/bulk.
          *
          *     Errors: 503 `ai_disabled`, 429 `ai_daily_limit_exceeded`, 502 `ai_invalid_output`
          *     or `ai_provider_error`.
@@ -2597,15 +2598,30 @@ export interface components {
          * @enum {string}
          */
         InviteStatus: "pending" | "accepted" | "expired";
+        /** LogDraftOut */
+        LogDraftOut: {
+            /** Rows */
+            rows: components["schemas"]["LogDraftRow"][];
+        };
+        /** LogDraftRequest */
+        LogDraftRequest: {
+            /** Text */
+            text: string;
+        };
         /**
-         * LogDraftOut
-         * @description A prod log draft for the user to review. Every ID is active and usable by the
+         * LogDraftRow
+         * @description One prod log row for the user to review. Every ID is active and usable by the
          *     caller and fits the linked-dropdown rules; anything the AI could not determine is
          *     null, and required ones are listed in `missing_fields`.
          */
-        LogDraftOut: {
-            /** Log Date */
-            log_date: string | null;
+        LogDraftRow: {
+            /**
+             * Log Date
+             * Format: date
+             */
+            log_date: string;
+            /** Is Planned */
+            is_planned: boolean;
             /** Work Setup Id */
             work_setup_id: number | null;
             /** Planned Hours */
@@ -2623,12 +2639,7 @@ export interface components {
             /** Description */
             description: string | null;
             /** Missing Fields */
-            missing_fields: ("log_date" | "work_setup_id" | "category_id" | "project_id" | "activity_id" | "hours")[];
-        };
-        /** LogDraftRequest */
-        LogDraftRequest: {
-            /** Text */
-            text: string;
+            missing_fields: ("work_setup_id" | "category_id" | "project_id" | "activity_id" | "hours")[];
         };
         /** LogOptionGroup */
         LogOptionGroup: {

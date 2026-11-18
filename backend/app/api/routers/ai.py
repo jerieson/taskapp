@@ -1,8 +1,6 @@
 """AI-assisted features. Results are drafts: nothing is saved until the user confirms
 through the normal endpoints. Each call counts toward the daily AI limit (429)."""
 
-from datetime import datetime
-
 from fastapi import APIRouter
 
 from app.ai.client import AIClientDep
@@ -23,9 +21,9 @@ async def log_draft(
     ai: AIClientDep,
     settings: SettingsDep,
 ) -> LogDraftOut:
-    """Draft a prod log from free text. The text is sent to the configured AI provider.
+    """Draft prod log rows (one or many) from free text. The text is sent to the
+    configured AI provider. Nothing is saved: confirm with POST /api/logs/bulk.
 
     Errors: 503 `ai_disabled`, 429 `ai_daily_limit_exceeded`, 502 `ai_invalid_output`
     or `ai_provider_error`."""
-    today = datetime.now(settings.tz).date()
-    return await nl_log_entry.draft_log(db, ai, user, data.text, today, settings.workday_hours)
+    return await nl_log_entry.draft_log(db, ai, user, data.text, settings)

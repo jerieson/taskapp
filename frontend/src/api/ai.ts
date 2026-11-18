@@ -8,7 +8,8 @@ import { useMutation } from '@tanstack/react-query'
 import { api, type Schemas } from './client'
 
 export type LogDraft = Schemas['LogDraftOut']
-export type LogDraftField = LogDraft['missing_fields'][number]
+export type LogDraftRow = Schemas['LogDraftRow']
+export type LogDraftField = LogDraftRow['missing_fields'][number]
 
 /** Must match LOG_DRAFT_MAX_CHARS in app/schemas/ai.py. */
 export const LOG_DRAFT_MAX_CHARS = 2000

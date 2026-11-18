@@ -16,7 +16,10 @@
  * A new row can start from a date (`prefill`, e.g. "Add" on /today), from another row
  * (`copyFrom`, "Copy": same values and remarks, its hours as planned hours, on the next
  * weekday) or from an AI draft (`draft`): required fields the AI left empty are
- * highlighted until filled in.
+ * highlighted until filled in, and hours the AI was unsure about are flagged to check.
+ *
+ * With `onApply` the form edits one AI draft row of a multi-row review instead of
+ * saving: submitting hands the checked values back (the review saves all rows at once).
  *
  * Weekly planning: in a locked week (after the Friday deadline) planned hours are read
  * only, except for admins. Rows are Planned unless the user picks Unplanned.
@@ -26,7 +29,7 @@ import { useMemo, type ComponentProps, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { LogDraft, LogDraftField } from '../../api/ai'
+import type { LogDraftField, LogDraftRow } from '../../api/ai'
 import { useCurrentUser } from '../../api/auth'
 import { ApiError, errorMessage } from '../../api/client'
 import {
@@ -136,8 +139,13 @@ interface LogFormProps {
   prefill?: LogPrefill
   /** New log only: start from a copy of this row. */
   copyFrom?: ProdLog
-  /** New log only: start from an AI draft. */
-  draft?: LogDraft
+  /** New log only: start from an AI draft row. */
+  draft?: DraftValues
+  /**
+   * Edit an AI draft row without saving: called with the checked values on submit
+   * (instead of creating the log), then onDone. Needs `draft`.
+   */
+  onApply?: (row: DraftValues) => void
   /** Called after a successful save (with the first row of a range), before onDone. */
   onSaved?: (log: ProdLog) => void
   /** Called after saving and on cancel. */
@@ -147,6 +155,9 @@ interface LogFormProps {
 export interface LogPrefill {
   logDate: string
 }
+
+/** An AI draft row, plus the deviation reason once a user has set one in review. */
+export type DraftValues = LogDraftRow & { deviation_reason_id?: number | null }
 
 /** Loads the dropdown options first, so every select is ready when the form mounts. */
 export default function LogFormBody(props: LogFormProps) {
@@ -186,7 +197,7 @@ function defaultValues(
     // The backend only returns active values that fit the linked rules.
     return {
       ...EMPTY,
-      log_date: draft.log_date ?? '',
+      log_date: draft.log_date,
       work_setup_id: asString(draft.work_setup_id) || linked.defaultWorkSetupId,
       planned_hours: asString(draft.planned_hours),
       hours_spent: asString(draft.hours_spent),
@@ -195,6 +206,8 @@ function defaultValues(
       activity_id: asString(draft.activity_id),
       om_project_id: asString(draft.om_project_id),
       description: draft.description ?? '',
+      deviation_reason_id: asString(draft.deviation_reason_id),
+      is_planned: draft.is_planned ? 'planned' : 'unplanned',
     }
   }
   if (log) {
@@ -263,6 +276,13 @@ const MISSING_HINT: ReactNode = (
   </span>
 )
 
+const CHECK_HOURS_HINT: ReactNode = (
+  <span className="flex items-center gap-1.5">
+    <span className="badge badge-warning badge-sm">Check</span>
+    Read as hours per day: the AI was not sure
+  </span>
+)
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const hasChoice = (choices: Choice[], id: string) => choices.some((c) => String(c.id) === id)
@@ -273,6 +293,7 @@ function LogFormInner({
   prefill,
   copyFrom,
   draft,
+  onApply,
   onSaved,
   onDone,
   options,
@@ -346,7 +367,9 @@ function LogFormInner({
   const logDate = values.log_date ?? ''
   const until = values.until ?? ''
   const rangeDays =
-    !log && logDate && until && !untilError(logDate, until) ? weekdaysBetween(logDate, until) : []
+    !log && !onApply && logDate && until && !untilError(logDate, until)
+      ? weekdaysBetween(logDate, until)
+      : []
   const isRange = rangeDays.length > 1 || (rangeDays.length === 1 && rangeDays[0] !== logDate)
 
   const week = usePlanningStatus(logDate || undefined, /^\d{4}-\d{2}-\d{2}$/.test(logDate))
@@ -365,10 +388,26 @@ function LogFormInner({
 
   // ------------------------------------------------------------ AI draft hints
 
-  /** Highlight for a required field the AI draft left empty, until it is filled in. */
-  function missing(field: LogDraftField, kind: 'input' | 'select') {
+  /**
+   * Highlight for a required field the AI draft left empty, until it is filled in, and
+   * for drafted hours the AI was unsure about, until they are changed.
+   */
+  function missing(
+    field: LogDraftField,
+    kind: 'input' | 'select',
+    hoursField?: 'planned_hours' | 'hours_spent',
+  ) {
     if (!draft?.missing_fields.includes(field)) return {}
     if (field === 'hours') {
+      const draftPlanned = asString(draft.planned_hours)
+      const draftActual = asString(draft.hours_spent)
+      if (draftPlanned || draftActual) {
+        const unchanged = planned === draftPlanned && actual === draftActual
+        const holdsHours = (hoursField === 'planned_hours' ? draftPlanned : draftActual) !== ''
+        return unchanged && holdsHours
+          ? { hint: CHECK_HOURS_HINT, className: `${kind}-warning` }
+          : {}
+      }
       if (planned || actual || errors.hours_spent) return {}
     } else if (values[field]?.trim() || errors[field]) {
       return {}
@@ -395,6 +434,24 @@ function LogFormInner({
     const onError = (error: unknown) => {
       const plain = withoutRowPrefix(error)
       if (!applyFieldErrors(plain, setError, FIELDS)) toast.error(errorMessage(plain))
+    }
+    if (onApply && draft) {
+      onApply({
+        log_date: data.log_date,
+        is_planned: data.is_planned === 'planned',
+        work_setup_id: Number(data.work_setup_id),
+        planned_hours: hoursOrNull(data.planned_hours),
+        hours_spent: hoursOrNull(data.hours_spent),
+        category_id: Number(data.category_id),
+        project_id: idOrNull(data.project_id),
+        activity_id: Number(data.activity_id),
+        om_project_id: body.om_project_id ?? null,
+        description: data.description || null,
+        deviation_reason_id: idOrNull(data.deviation_reason_id),
+        missing_fields: [],
+      })
+      onDone()
+      return
     }
     const finish = (saved: ProdLog, message: string) => {
       onSaved?.(saved)
@@ -441,7 +498,7 @@ function LogFormInner({
           editor.
         </p>
       )}
-      {draft && (
+      {draft && !onApply && (
         <div role="status" className="alert alert-info mb-2 text-sm">
           <SparklesIcon className="size-4" />
           <span>Drafted by AI. Check every field before saving.</span>
@@ -460,9 +517,8 @@ function LogFormInner({
           render={({ field }) => (
             <DateField
               label="Date"
-              wrapperClassName={log ? 'md:col-span-2' : undefined}
+              wrapperClassName={log || onApply ? 'md:col-span-2' : undefined}
               error={errors.log_date?.message}
-              {...missing('log_date', 'input')}
               value={field.value}
               onChange={field.onChange}
               onBlur={field.onBlur}
@@ -470,7 +526,7 @@ function LogFormInner({
             />
           )}
         />
-        {!log && (
+        {!log && !onApply && (
           <Controller
             control={control}
             name="until"
@@ -523,7 +579,7 @@ function LogFormInner({
           readOnly={plannedLocked}
           className={plannedLocked ? 'bg-base-200' : ''}
           error={errors.planned_hours?.message}
-          {...missing('hours', 'input')}
+          {...missing('hours', 'input', 'planned_hours')}
           {...(lockHint ? { hint: lockHint } : {})}
           {...register('planned_hours')}
         />
@@ -535,7 +591,7 @@ function LogFormInner({
           min="0.25"
           max={maxHours}
           error={errors.hours_spent?.message}
-          {...missing('hours', 'input')}
+          {...missing('hours', 'input', 'hours_spent')}
           {...register('hours_spent')}
         />
         <ChoiceSelect
@@ -607,7 +663,13 @@ function LogFormInner({
           Cancel
         </button>
         <SubmitButton isPending={isPending}>
-          {log ? 'Save' : isRange ? `Add ${plural(rangeDays.length, 'row')}` : 'Add log'}
+          {onApply
+            ? 'Done'
+            : log
+              ? 'Save'
+              : isRange
+                ? `Add ${plural(rangeDays.length, 'row')}`
+                : 'Add log'}
         </SubmitButton>
       </div>
     </form>
