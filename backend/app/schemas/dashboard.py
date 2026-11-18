@@ -1,5 +1,6 @@
 """Dashboard aggregations. All numbers are computed in SQL; weeks start on Monday and
-dates follow APP_TIMEZONE."""
+dates follow APP_TIMEZONE. Hours are actual hours (`hours_spent`); rows without actual
+hours are left out, except for the planned hours on the personal daily chart."""
 
 from datetime import date
 from typing import Self
@@ -55,6 +56,20 @@ class HoursPerDay(BaseModel):
     total: HoursOut
 
 
+class DayPlannedHours(DayHours):
+    planned_hours: HoursOut
+    """Planned hours on this day (rows with planned hours, whether or not actual hours
+    have been filled in)."""
+
+
+class PersonalHoursPerDay(HoursPerDay):
+    """`hours` and `total` are actual hours; planned hours are alongside."""
+
+    days: list[DayPlannedHours]  # type: ignore[assignment]
+    """All seven days, Monday first; days without logs have 0 hours."""
+    planned_total: HoursOut
+
+
 class WeekHours(BaseModel):
     week_start: date
     """The Monday of the week."""
@@ -91,6 +106,19 @@ class HoursByCategory(BaseModel):
     date_to: date
     items: list[CategoryHours]
     """Most hours first. Only categories with hours in the range are listed."""
+    total: HoursOut
+
+
+class ActivityHours(BaseModel):
+    activity: LookupRef
+    hours: HoursOut
+
+
+class HoursByActivity(BaseModel):
+    date_from: date
+    date_to: date
+    items: list[ActivityHours]
+    """Most hours first. Only activities with hours in the range are listed."""
     total: HoursOut
 
 

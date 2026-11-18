@@ -1140,6 +1140,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teams/{team_id}/dashboard/hours/by-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hours By Activity */
+        get: operations["hours_by_activity_api_teams__team_id__dashboard_hours_by_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teams/{team_id}/dashboard/tasks": {
         parameters: {
             query?: never;
@@ -1170,7 +1187,7 @@ export interface paths {
         };
         /**
          * Hours Per Day
-         * @description Hours logged on each day of one week (Monday to Sunday).
+         * @description Actual hours on each day of one week (Monday to Sunday), with planned hours.
          */
         get: operations["hours_per_day_api_dashboard_hours_daily_get"];
         put?: never;
@@ -1227,6 +1244,23 @@ export interface paths {
         };
         /** Hours By Category */
         get: operations["hours_by_category_api_dashboard_hours_by_category_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/hours/by-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hours By Activity */
+        get: operations["hours_by_activity_api_dashboard_hours_by_activity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2012,6 +2046,12 @@ export interface components {
             /** Activity Ids */
             activity_ids: number[];
         };
+        /** ActivityHours */
+        ActivityHours: {
+            activity: components["schemas"]["LookupRef"];
+            /** Hours */
+            hours: number;
+        };
         /** ActivityOut */
         ActivityOut: {
             /** Id */
@@ -2176,6 +2216,18 @@ export interface components {
             /** Hours */
             hours: number;
         };
+        /** DayPlannedHours */
+        DayPlannedHours: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hours */
+            hours: number;
+            /** Planned Hours */
+            planned_hours: number;
+        };
         /** ErrorBody */
         ErrorBody: {
             /**
@@ -2231,6 +2283,23 @@ export interface components {
              */
             database: "ok";
         };
+        /** HoursByActivity */
+        HoursByActivity: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Items */
+            items: components["schemas"]["ActivityHours"][];
+            /** Total */
+            total: number;
+        };
         /** HoursByCategory */
         HoursByCategory: {
             /**
@@ -2279,23 +2348,6 @@ export interface components {
             date_to: string;
             /** Items */
             items: components["schemas"]["ProjectHours"][];
-            /** Total */
-            total: number;
-        };
-        /** HoursPerDay */
-        HoursPerDay: {
-            /**
-             * Week Start
-             * Format: date
-             */
-            week_start: string;
-            /**
-             * Week End
-             * Format: date
-             */
-            week_end: string;
-            /** Days */
-            days: components["schemas"]["DayHours"][];
             /** Total */
             total: number;
         };
@@ -2453,25 +2505,34 @@ export interface components {
         /**
          * LogDraftOut
          * @description A prod log draft for the user to review. Every ID is active and usable by the
-         *     caller; anything the AI could not determine is null and listed in `missing_fields`.
+         *     caller and fits the linked-dropdown rules; anything the AI could not determine is
+         *     null, and required ones are listed in `missing_fields`.
          */
         LogDraftOut: {
+            /** Log Date */
+            log_date: string | null;
+            /** Work Setup Id */
+            work_setup_id: number | null;
+            /** Planned Hours */
+            planned_hours: number | null;
+            /** Hours Spent */
+            hours_spent: number | null;
+            /** Category Id */
+            category_id: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Activity Id */
+            activity_id: number | null;
+            /** Om Project Id */
+            om_project_id: number | null;
+            /** Task Id */
+            task_id: number | null;
             /** Title */
             title: string | null;
             /** Description */
             description: string | null;
-            /** Log Date */
-            log_date: string | null;
-            /** Hours Spent */
-            hours_spent: number | null;
-            /** Task Id */
-            task_id: number | null;
-            /** Project Id */
-            project_id: number | null;
-            /** Category Id */
-            category_id: number | null;
             /** Missing Fields */
-            missing_fields: ("title" | "log_date" | "hours_spent" | "category_id")[];
+            missing_fields: ("log_date" | "work_setup_id" | "category_id" | "project_id" | "activity_id" | "hours")[];
         };
         /** LogDraftRequest */
         LogDraftRequest: {
@@ -2855,6 +2916,28 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * PersonalHoursPerDay
+         * @description `hours` and `total` are actual hours; planned hours are alongside.
+         */
+        PersonalHoursPerDay: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Days */
+            days: components["schemas"]["DayPlannedHours"][];
+            /** Total */
+            total: number;
+            /** Planned Total */
+            planned_total: number;
+        };
         /** PlainLookupCreate */
         PlainLookupCreate: {
             /** Label */
@@ -2864,6 +2947,18 @@ export interface components {
         PlainLookupUpdate: {
             /** Label */
             label?: string | null;
+        };
+        /**
+         * PlainRef
+         * @description A dropdown value without a color (an O&M project) as embedded in a record.
+         */
+        PlainRef: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Is Active */
+            is_active: boolean;
         };
         /**
          * PlanItemCreate
@@ -3034,8 +3129,13 @@ export interface components {
         };
         /**
          * ProdLogCreate
-         * @description When `task_id` is given and project/category are omitted, they are copied from
-         *     the task (if those values are still active).
+         * @description A row needs planned hours, actual hours, or both.
+         *
+         *     The linked dropdowns must fit together: the project is linked to the category, the
+         *     activity is in the project's activity group, and an O&M project is only allowed when
+         *     the category offers it. When `task_id` is given and project/category are omitted,
+         *     they are copied from the task (if those values are still active). An omitted work
+         *     set-up is the default one.
          */
         ProdLogCreate: {
             /**
@@ -3043,21 +3143,28 @@ export interface components {
              * Format: date
              */
             log_date: string;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Hours Spent
-             * @example 1.5
-             */
-            hours_spent: number | string;
-            /** Task Id */
-            task_id?: number | null;
-            /** Project Id */
-            project_id?: number | null;
+            /** Work Setup Id */
+            work_setup_id?: number | null;
+            /** Planned Hours */
+            planned_hours?: (number | string) | null;
+            /** Hours Spent */
+            hours_spent?: (number | string) | null;
             /** Category Id */
             category_id?: number | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Activity Id */
+            activity_id: number;
+            /** Om Project Id */
+            om_project_id?: number | null;
+            /** Task Id */
+            task_id?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Deviation Reason */
+            deviation_reason?: string | null;
         };
         /** ProdLogListItem */
         ProdLogListItem: {
@@ -3071,17 +3178,26 @@ export interface components {
              * Format: date
              */
             log_date: string;
-            /** Title */
-            title: string;
-            /** Description */
-            description: string | null;
+            work_setup: components["schemas"]["LookupRef"];
+            /** Is Planned */
+            is_planned: boolean;
+            /** Planned Hours */
+            planned_hours: number | null;
+            /** Hours Spent */
+            hours_spent: number | null;
+            category: components["schemas"]["LookupRef"];
+            project: components["schemas"]["ProjectRef"] | null;
+            activity: components["schemas"]["LookupRef"];
+            om_project: components["schemas"]["PlainRef"] | null;
             /** Task Id */
             task_id: number | null;
             task: components["schemas"]["TaskRef"] | null;
-            project: components["schemas"]["ProjectRef"] | null;
-            category: components["schemas"]["LookupRef"];
-            /** Hours Spent */
-            hours_spent: number;
+            /** Title */
+            title: string | null;
+            /** Description */
+            description: string | null;
+            /** Deviation Reason */
+            deviation_reason: string | null;
             updated_by: components["schemas"]["UserRef"];
             /**
              * Created At
@@ -3095,6 +3211,8 @@ export interface components {
             updated_at: string;
             /** Day Total Hours */
             day_total_hours: number;
+            /** Day Planned Hours */
+            day_planned_hours: number;
         };
         /** ProdLogOut */
         ProdLogOut: {
@@ -3108,17 +3226,26 @@ export interface components {
              * Format: date
              */
             log_date: string;
-            /** Title */
-            title: string;
-            /** Description */
-            description: string | null;
+            work_setup: components["schemas"]["LookupRef"];
+            /** Is Planned */
+            is_planned: boolean;
+            /** Planned Hours */
+            planned_hours: number | null;
+            /** Hours Spent */
+            hours_spent: number | null;
+            category: components["schemas"]["LookupRef"];
+            project: components["schemas"]["ProjectRef"] | null;
+            activity: components["schemas"]["LookupRef"];
+            om_project: components["schemas"]["PlainRef"] | null;
             /** Task Id */
             task_id: number | null;
             task: components["schemas"]["TaskRef"] | null;
-            project: components["schemas"]["ProjectRef"] | null;
-            category: components["schemas"]["LookupRef"];
-            /** Hours Spent */
-            hours_spent: number;
+            /** Title */
+            title: string | null;
+            /** Description */
+            description: string | null;
+            /** Deviation Reason */
+            deviation_reason: string | null;
             updated_by: components["schemas"]["UserRef"];
             /**
              * Created At
@@ -3135,23 +3262,34 @@ export interface components {
          * ProdLogUpdate
          * @description Omitted fields keep their value. Send null to clear an optional field.
          *
-         *     A category or project that has been deactivated may be kept but not newly chosen.
+         *     A value that has been deactivated (or a link the admin has since removed) may be
+         *     kept but not newly chosen. The row must keep planned hours, actual hours, or both.
          */
         ProdLogUpdate: {
             /** Log Date */
             log_date?: string | null;
+            /** Work Setup Id */
+            work_setup_id?: number | null;
+            /** Planned Hours */
+            planned_hours?: (number | string) | null;
+            /** Hours Spent */
+            hours_spent?: (number | string) | null;
+            /** Category Id */
+            category_id?: number | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Activity Id */
+            activity_id?: number | null;
+            /** Om Project Id */
+            om_project_id?: number | null;
+            /** Task Id */
+            task_id?: number | null;
             /** Title */
             title?: string | null;
             /** Description */
             description?: string | null;
-            /** Hours Spent */
-            hours_spent?: (number | string) | null;
-            /** Task Id */
-            task_id?: number | null;
-            /** Project Id */
-            project_id?: number | null;
-            /** Category Id */
-            category_id?: number | null;
+            /** Deviation Reason */
+            deviation_reason?: string | null;
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -5246,6 +5384,7 @@ export interface operations {
                 date_to?: string | null;
                 project_id?: number | null;
                 category_id?: number | null;
+                activity_id?: number | null;
                 task_id?: number | null;
             };
             header?: never;
@@ -6506,6 +6645,7 @@ export interface operations {
                 date_to?: string | null;
                 project_id?: number | null;
                 category_id?: number | null;
+                activity_id?: number | null;
                 user_id?: number | null;
             };
             header?: never;
@@ -6799,6 +6939,49 @@ export interface operations {
             };
         };
     };
+    hours_by_activity_api_teams__team_id__dashboard_hours_by_activity_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path: {
+                team_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursByActivity"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     task_counts_api_teams__team_id__dashboard_tasks_get: {
         parameters: {
             query: {
@@ -6859,7 +7042,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HoursPerDay"];
+                    "application/json": components["schemas"]["PersonalHoursPerDay"];
                 };
             };
             /** @description Client error */
@@ -6980,6 +7163,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HoursByCategory"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    hours_by_activity_api_dashboard_hours_by_activity_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursByActivity"];
                 };
             };
             /** @description Client error */

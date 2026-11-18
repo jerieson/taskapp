@@ -1,5 +1,6 @@
 """POST /api/ai/log-draft with FakeProvider: context sent to the model, and the
-post-processing that strips IDs the caller may not use and out-of-range values."""
+post-processing that strips IDs the caller may not use, links that don't fit, and
+out-of-range values."""
 
 import json
 from collections.abc import Callable
@@ -13,12 +14,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts.nl_log_entry import LogDraftLLM
 from app.core.config import Settings
-from app.models import Role
+from app.models import Role, WorkSetup
 from app.models.ai import AIRequest
 from app.models.enums import AIFeature
 from tests.ai_fakes import FakeProvider
 from tests.auth_helpers import fetch_csrf, login_as
-from tests.factories import make_category, make_project, make_status, make_task
+from tests.factories import (
+    make_activity,
+    make_activity_group,
+    make_category,
+    make_linked,
+    make_om_project,
+    make_project,
+    make_status,
+    make_task,
+    make_work_setup,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -34,15 +45,25 @@ def fake_ai(app: FastAPI) -> FakeProvider:
 
 def _llm(**kw: Any) -> LogDraftLLM:
     fields: dict[str, Any] = {
+        "log_date": "2026-11-16",
+        "work_setup_id": None,
+        "planned_hours": None,
+        "hours_spent": 2.5,
+        "category_id": None,
+        "project_id": None,
+        "activity_id": None,
+        "om_project_id": None,
+        "task_id": None,
         "title": "Fixed login redirect",
         "description": None,
-        "log_date": "2026-11-16",
-        "hours_spent": 2.5,
-        "task_id": None,
-        "project_id": None,
-        "category_id": None,
     }
     return LogDraftLLM(**{**fields, **kw})
+
+
+async def _default_work_setup(db: AsyncSession) -> int:
+    value = await db.scalar(select(WorkSetup.id).where(WorkSetup.is_default))
+    assert value is not None
+    return value
 
 
 async def _draft(client: AsyncClient, fake: FakeProvider, **kw: Any) -> dict[str, Any]:
@@ -57,8 +78,9 @@ async def test_valid_draft_passes_through(
     client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
 ) -> None:
     user = await login_as(client, db)
-    category = await make_category(db)
-    project = await make_project(db)
+    refs = await make_linked(db, requires_om_project=True)
+    om = await make_om_project(db)
+    setup = await make_work_setup(db)
     task = await make_task(db, user=user)
 
     body = await _draft(
@@ -66,19 +88,23 @@ async def test_valid_draft_passes_through(
         fake_ai,
         title="  Fixed login redirect  ",
         description="Cookie path was wrong",
+        work_setup_id=setup.id,
+        planned_hours=3,
+        om_project_id=om.id,
         task_id=task.id,
-        project_id=project.id,
-        category_id=category.id,
+        **refs.ids(),
     )
 
     assert body == {
+        "log_date": "2026-11-16",
+        "work_setup_id": setup.id,
+        "planned_hours": 3,
+        "hours_spent": 2.5,
+        **refs.ids(),
+        "om_project_id": om.id,
+        "task_id": task.id,
         "title": "Fixed login redirect",
         "description": "Cookie path was wrong",
-        "log_date": "2026-11-16",
-        "hours_spent": 2.5,
-        "task_id": task.id,
-        "project_id": project.id,
-        "category_id": category.id,
         "missing_fields": [],
     }
     rows = await db.scalars(select(AIRequest).where(AIRequest.user_id == user.id))
@@ -93,6 +119,10 @@ async def test_prompt_holds_only_allowed_context(
     await make_category(db, label="Retired category", is_active=False)
     await make_project(db, name="Apollo")
     await make_project(db, name="Old project", is_active=False)
+    await make_activity(db, label="Testing: UAT")
+    await make_activity(db, label="Retired activity", is_active=False)
+    await make_om_project(db, label="[SFA-App] Collection")
+    await make_work_setup(db, label="Hybrid")
     await make_task(db, user=user, title="My open task")
     done = await make_status(db, is_done=True)
     await make_task(db, user=user, title="My finished task", status_id=done.id)
@@ -103,10 +133,18 @@ async def test_prompt_holds_only_allowed_context(
     call = fake_ai.calls[0]
     assert call["schema"] is LogDraftLLM
     prompt: str = call["user"]
-    for shown in ("Coding", "Apollo", "My open task"):
-        assert shown in prompt
-    for hidden in ("Retired category", "Old project", "My finished task", "Someone else's"):
-        assert hidden not in prompt
+    shown = ("Coding", "Apollo", "My open task", "Testing: UAT", "[SFA-App] Collection", "Hybrid")
+    for value in shown:
+        assert value in prompt
+    hidden = (
+        "Retired category",
+        "Old project",
+        "Retired activity",
+        "My finished task",
+        "Someone else's",
+    )
+    for value in hidden:
+        assert value not in prompt
     assert '<note>\n"2.5h yesterday on the login bug"\n</note>' in prompt
     assert "Today's date:" in prompt
 
@@ -141,10 +179,20 @@ async def test_invalid_and_inactive_ids_are_stripped(
         category_id=inactive_category.id,
     )
     assert (body["task_id"], body["project_id"], body["category_id"]) == (None, None, None)
-    assert body["missing_fields"] == ["category_id"]
+    assert body["missing_fields"] == ["category_id", "project_id", "activity_id"]
 
-    body = await _draft(client, fake_ai, project_id=999_998, category_id=999_997)
-    assert (body["project_id"], body["category_id"]) == (None, None)
+    body = await _draft(
+        client,
+        fake_ai,
+        project_id=999_998,
+        category_id=999_997,
+        activity_id=999_996,
+        work_setup_id=999_995,
+        om_project_id=999_994,
+    )
+    assert (body["project_id"], body["category_id"], body["activity_id"]) == (None, None, None)
+    assert body["om_project_id"] is None
+    assert body["work_setup_id"] == await _default_work_setup(db)
 
 
 async def test_other_users_task_is_stripped(
@@ -174,10 +222,10 @@ async def test_out_of_range_hours_are_nulled(
 ) -> None:
     await login_as(client, db)
 
-    body = await _draft(client, fake_ai, hours_spent=hours)
+    body = await _draft(client, fake_ai, hours_spent=hours, planned_hours=hours)
 
-    assert body["hours_spent"] is None
-    assert "hours_spent" in body["missing_fields"]
+    assert (body["hours_spent"], body["planned_hours"]) == (None, None)
+    assert "hours" in body["missing_fields"]
 
 
 async def test_hours_are_rounded_to_hundredths(
@@ -187,23 +235,24 @@ async def test_hours_are_rounded_to_hundredths(
 
     assert (await _draft(client, fake_ai, hours_spent=1.236))["hours_spent"] == 1.24
     assert (await _draft(client, fake_ai, hours_spent=24))["hours_spent"] == 24
+    assert (await _draft(client, fake_ai, planned_hours=0.555))["planned_hours"] == 0.56
 
 
 async def test_task_prefills_active_project_and_category(
     client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
 ) -> None:
     user = await login_as(client, db)
-    project = await make_project(db)
-    category = await make_category(db)
+    refs = await make_linked(db)
+    project, category = refs.project, refs.category
     task = await make_task(db, user=user, project_id=project.id, category_id=category.id)
     other_category = await make_category(db)
 
     body = await _draft(client, fake_ai, task_id=task.id)
     assert (body["project_id"], body["category_id"]) == (project.id, category.id)
 
-    # The model's own valid choice wins over the task's value.
+    # The model's own valid category wins; the task's project then doesn't fit it.
     body = await _draft(client, fake_ai, task_id=task.id, category_id=other_category.id)
-    assert body["category_id"] == other_category.id
+    assert (body["category_id"], body["project_id"]) == (other_category.id, None)
 
     # Inactive values on the task are not copied.
     category.is_active = False
@@ -211,6 +260,47 @@ async def test_task_prefills_active_project_and_category(
     await db.flush()
     body = await _draft(client, fake_ai, task_id=task.id)
     assert (body["project_id"], body["category_id"]) == (None, None)
+
+
+async def test_links_that_do_not_fit_are_stripped(
+    client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
+) -> None:
+    await login_as(client, db)
+    refs = await make_linked(db)
+    other = await make_linked(db)
+    om = await make_om_project(db)
+
+    # Project not under the category.
+    body = await _draft(client, fake_ai, category_id=refs.category.id, project_id=other.project.id)
+    assert (body["category_id"], body["project_id"]) == (refs.category.id, None)
+
+    # Activity not in the project's group; O&M project on a category that doesn't offer it.
+    body = await _draft(
+        client, fake_ai, **refs.ids() | {"activity_id": other.activity.id}, om_project_id=om.id
+    )
+    assert (body["project_id"], body["activity_id"], body["om_project_id"]) == (
+        refs.project.id,
+        None,
+        None,
+    )
+    assert body["missing_fields"] == ["activity_id"]
+
+
+async def test_category_inferred_from_single_category_project(
+    client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
+) -> None:
+    await login_as(client, db)
+    refs = await make_linked(db)
+    body = await _draft(client, fake_ai, project_id=refs.project.id)
+    assert body["category_id"] == refs.category.id
+
+    # Ambiguous when the project is under two categories.
+    group = await make_activity_group(db)
+    shared = await make_project(
+        db, categories=[refs.category, await make_category(db)], activity_group_id=group.id
+    )
+    body = await _draft(client, fake_ai, project_id=shared.id)
+    assert (body["category_id"], body["project_id"]) == (None, shared.id)
 
 
 async def test_missing_and_malformed_values_are_listed(
@@ -223,7 +313,13 @@ async def test_missing_and_malformed_values_are_listed(
     )
 
     assert (body["title"], body["description"], body["log_date"]) == (None, None, None)
-    assert body["missing_fields"] == ["title", "log_date", "hours_spent", "category_id"]
+    assert body["missing_fields"] == [
+        "log_date",
+        "category_id",
+        "project_id",
+        "activity_id",
+        "hours",
+    ]
 
 
 async def test_long_title_is_truncated(

@@ -1,9 +1,11 @@
 /*
  * /dashboard: the user's own numbers. Hours per day (one week, `?week=` Monday) and per
- * week (last 8 weeks); hours by project and category plus task counts for a shared
+ * week (last 8 weeks), actual with planned alongside; hours by project, category and
+ * activity plus task counts for a shared
  * date range (`?range=` / `?from=&to=`); process runs in progress.
  */
 import {
+  useHoursByActivity,
   useHoursByCategory,
   useHoursByProject,
   useHoursPerDay,
@@ -32,6 +34,7 @@ export default function DashboardPage() {
   const weekly = useHoursPerWeek()
   const byProject = useHoursByProject(range)
   const byCategory = useHoursByCategory(range)
+  const byActivity = useHoursByActivity(range)
   const counts = useTaskCounts(range)
 
   return (
@@ -126,6 +129,28 @@ export default function DashboardPage() {
                         key: String(item.category.id),
                         label: item.category.label,
                         note: item.category.is_active ? undefined : 'inactive',
+                        hours: item.hours,
+                      }))}
+                    />
+                  )}
+                </ChartCard>
+              )}
+            </AsyncState>
+            <AsyncState query={byActivity} skeleton={<SkeletonChart />}>
+              {() => (
+                <ChartCard
+                  title="Hours by activity"
+                  aside={`Total ${formatHours(byActivity.data!.total)}`}
+                >
+                  {byActivity.data!.items.length === 0 ? (
+                    <NoHours title="No hours in this range" />
+                  ) : (
+                    <HoursBarChart
+                      caption="Hours by activity"
+                      items={byActivity.data!.items.map((item) => ({
+                        key: String(item.activity.id),
+                        label: item.activity.label,
+                        note: item.activity.is_active ? undefined : 'inactive',
                         hours: item.hours,
                       }))}
                     />

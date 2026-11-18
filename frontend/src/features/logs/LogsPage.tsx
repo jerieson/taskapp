@@ -19,10 +19,11 @@ import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useToast } from '../../components/toast-context'
-import { formatDay, formatHours } from '../../lib/format'
+import { formatDay } from '../../lib/format'
 import AiLogEntry from '../ai/AiLogEntry'
 import LogFormBody from './LogForm'
 import LogList, { LogListSkeleton } from './LogList'
+import { logHours, logLabel } from './logText'
 
 /** Form values for the filter controls ("" = not filtered). */
 interface FilterState {
@@ -30,10 +31,18 @@ interface FilterState {
   dateTo: string
   project: string
   category: string
+  activity: string
   task: string
 }
 
-const NO_FILTERS: FilterState = { dateFrom: '', dateTo: '', project: '', category: '', task: '' }
+const NO_FILTERS: FilterState = {
+  dateFrom: '',
+  dateTo: '',
+  project: '',
+  category: '',
+  activity: '',
+  task: '',
+}
 
 const optionalId = (value: string) => (value ? Number(value) : undefined)
 
@@ -43,6 +52,7 @@ function toLogFilters(f: FilterState): LogFilters {
     date_to: f.dateTo || undefined,
     project_id: optionalId(f.project),
     category_id: optionalId(f.category),
+    activity_id: optionalId(f.activity),
     task_id: optionalId(f.task),
   }
 }
@@ -105,6 +115,13 @@ function Filters({
         value={value.category}
         onChange={(category) => set({ category })}
       />
+      <LookupFilter
+        kind="activities"
+        label="Activity"
+        allLabel="Any activity"
+        value={value.activity}
+        onChange={(activity) => set({ activity })}
+      />
       <TaskFilter value={value.task} onChange={(task) => set({ task })} />
     </FilterPanel>
   )
@@ -131,7 +148,7 @@ export default function LogsPage() {
     if (!deleting) return
     const log = deleting
     remove.mutate(log.id, {
-      onSuccess: () => toast.success(`“${log.title}” deleted`),
+      onSuccess: () => toast.success(`“${logLabel(log)}” deleted`),
       onError: (error) => toast.error(errorMessage(error)),
       onSettled: () => setDeleting(null),
     })
@@ -148,7 +165,7 @@ export default function LogsPage() {
     <>
       <PageHeader
         title="Logs"
-        description="What you worked on each day. A day can hold at most 24 hours."
+        description="Your productivity log: planned hours ahead of time, actual hours afterwards. A day can hold at most 24 planned and 24 actual hours."
         actions={newButton}
       />
 
@@ -175,7 +192,7 @@ export default function LogsPage() {
             <EmptyState
               icon={<ClockIcon className="size-6" />}
               title="No logs yet"
-              description="Record the time you spend each day, optionally linked to a task."
+              description="Plan your hours ahead of time and record the actual hours afterwards."
               action={newButton}
             />
           )
@@ -195,7 +212,7 @@ export default function LogsPage() {
                   type="button"
                   className="btn btn-sm btn-ghost"
                   onClick={() => setDeleting(log)}
-                  aria-label={`Delete ${log.title}`}
+                  aria-label={`Delete ${logLabel(log)}`}
                 >
                   <TrashIcon className="size-4" />
                   <span className="sm:hidden">Delete</span>
@@ -234,9 +251,8 @@ export default function LogsPage() {
       >
         {deleting && (
           <p>
-            <strong className="break-words">{deleting.title}</strong> (
-            {formatHours(deleting.hours_spent)} on {formatDay(deleting.log_date)}) will be deleted.
-            This cannot be undone.
+            <strong className="break-words">{logLabel(deleting)}</strong> ({logHours(deleting)} on{' '}
+            {formatDay(deleting.log_date)}) will be deleted. This cannot be undone.
           </p>
         )}
       </ConfirmModal>

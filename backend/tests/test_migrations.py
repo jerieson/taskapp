@@ -1,8 +1,14 @@
 """The migrations match the models and can be rolled all the way back and re-applied."""
 
-from alembic import command
+import asyncio
+from decimal import Decimal
+from typing import Any
 
-from tests.conftest import alembic_config
+from alembic import command
+from sqlalchemy import NullPool, text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from tests.conftest import TEST_DATABASE_URL, alembic_config
 
 
 def test_models_match_migrations() -> None:
@@ -14,3 +20,82 @@ def test_downgrade_to_base_and_upgrade_again() -> None:
     config = alembic_config()
     command.downgrade(config, "base")
     command.upgrade(config, "head")
+
+
+# ---------------------------------------------------------------- prod log fields backfill
+
+BEFORE_LOG_FIELDS = "d4073174fb41"
+LOG_FIELDS = "fc20ba24a501"
+
+
+def _sql(statements: list[str], fetch: str | None = None) -> list[Any]:
+    """Run statements in one committed transaction; optionally return rows of `fetch`."""
+
+    async def run() -> list[Any]:
+        engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+        try:
+            async with engine.begin() as conn:
+                for statement in statements:
+                    await conn.execute(text(statement))
+                return list((await conn.execute(text(fetch))).all()) if fetch else []
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(run())
+
+
+def test_log_fields_backfill_and_downgrade() -> None:
+    config = alembic_config()
+    command.downgrade(config, BEFORE_LOG_FIELDS)
+    try:
+        _sql(
+            [
+                "INSERT INTO users (username, email, password_hash, role) "
+                "VALUES ('backfill_user', 'backfill@example.com', '!x', 'admin')",
+                "INSERT INTO categories (label) VALUES ('Backfill category')",
+                "INSERT INTO prod_logs (user_id, log_date, title, category_id, hours_spent, "
+                "updated_by) SELECT u.id, '2026-11-02', 'Old row', c.id, 2.5, u.id "
+                "FROM users u, categories c "
+                "WHERE u.username = 'backfill_user' AND c.label = 'Backfill category'",
+            ]
+        )
+        command.upgrade(config, LOG_FIELDS)
+
+        rows = _sql(
+            [],
+            "SELECT a.label, w.is_default, l.is_planned, l.planned_hours, l.hours_spent "
+            "FROM prod_logs l JOIN activities a ON a.id = l.activity_id "
+            "JOIN work_setups w ON w.id = l.work_setup_id WHERE l.title = 'Old row'",
+        )
+        assert [tuple(r) for r in rows] == [("General", True, False, None, Decimal("2.50"))]
+
+        # A planned-only row without a title survives a downgrade.
+        _sql(
+            [
+                "INSERT INTO prod_logs (user_id, log_date, category_id, activity_id, "
+                "work_setup_id, planned_hours, is_planned, updated_by) "
+                "SELECT user_id, log_date, category_id, activity_id, work_setup_id, 4, true, "
+                "user_id FROM prod_logs WHERE title = 'Old row'"
+            ]
+        )
+        command.downgrade(config, BEFORE_LOG_FIELDS)
+        rows = _sql(
+            [],
+            "SELECT title, hours_spent FROM prod_logs l JOIN users u ON u.id = l.user_id "
+            "WHERE u.username = 'backfill_user' ORDER BY l.id",
+        )
+        assert [tuple(r) for r in rows] == [
+            ("Old row", Decimal("2.50")),
+            ("General", Decimal("4.00")),
+        ]
+    finally:
+        command.upgrade(config, "head")
+        _sql(
+            [
+                "DELETE FROM prod_logs WHERE user_id IN "
+                "(SELECT id FROM users WHERE username = 'backfill_user')",
+                "DELETE FROM users WHERE username = 'backfill_user'",
+                "DELETE FROM categories WHERE label = 'Backfill category'",
+                "DELETE FROM activities WHERE label = 'General'",
+            ]
+        )

@@ -17,6 +17,7 @@ interface CommonFilters {
   date_to?: string
   project_id?: number
   category_id?: number
+  activity_id?: number
 }
 
 export interface LogFilters extends CommonFilters {

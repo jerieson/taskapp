@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
@@ -130,7 +131,10 @@ async def make_task(session: AsyncSession, *, user: User | None = None, **kw: An
 async def make_log(
     session: AsyncSession, *, user: User | None = None, task: Task | None = None, **kw: Any
 ) -> ProdLog:
-    """team_id is snapshotted from the author and updated_by defaults to the author."""
+    """team_id is snapshotted from the author and updated_by defaults to the author.
+
+    Defaults: actual hours 1 (no planned hours), a new activity, the seeded default
+    work set-up. Link rules are not applied (the service checks those)."""
     if user is None:
         user = await make_user(session)
     fields: dict[str, Any] = {
@@ -142,7 +146,38 @@ async def make_log(
         "title": f"Log {_n()}",
         "hours_spent": Decimal("1.00"),
     }
+    if "work_setup_id" not in kw:
+        fields["work_setup_id"] = await session.scalar(
+            select(WorkSetup.id).where(WorkSetup.is_default)
+        )
+    if "activity_id" not in kw:
+        fields["activity_id"] = (await make_activity(session)).id
     if "category_id" not in kw:
         from_task = task.category_id if task else None
         fields["category_id"] = from_task or (await make_category(session)).id
     return await _save(session, ProdLog(**{**fields, **kw}))
+
+
+class LinkedRefs:
+    """A category, a project under it, and an activity in the project's group: values
+    that pass the prod log linked-dropdown rules."""
+
+    def __init__(
+        self, category: Category, project: Project, group: ActivityGroup, activity: Activity
+    ) -> None:
+        self.category, self.project, self.group, self.activity = category, project, group, activity
+
+    def ids(self) -> dict[str, int]:
+        return {
+            "category_id": self.category.id,
+            "project_id": self.project.id,
+            "activity_id": self.activity.id,
+        }
+
+
+async def make_linked(session: AsyncSession, **category_kw: Any) -> LinkedRefs:
+    category = await make_category(session, **category_kw)
+    activity = await make_activity(session)
+    group = await make_activity_group(session, activities=[activity])
+    project = await make_project(session, categories=[category], activity_group_id=group.id)
+    return LinkedRefs(category, project, group, activity)

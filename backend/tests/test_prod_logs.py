@@ -1,4 +1,6 @@
-"""Prod logs and team logs: ownership, team snapshot, audit, 24-hour cap, team access."""
+"""Prod logs and team logs: ownership, team snapshot, audit, 24-hour caps, team access.
+
+Linked-dropdown rules and planned/actual fields are in test_prod_log_fields.py."""
 
 from datetime import date, timedelta
 from decimal import Decimal
@@ -11,6 +13,7 @@ from app.models import ProdLog, Role, Team, User
 from tests.auth_helpers import login_as, use_new_session
 from tests.factories import (
     make_category,
+    make_linked,
     make_log,
     make_project,
     make_task,
@@ -24,12 +27,12 @@ TODAY = date.today()
 
 
 async def _body(db: AsyncSession, **kw: object) -> dict[str, object]:
-    category = await make_category(db)
+    refs = await make_linked(db)
     return {
         "log_date": TODAY.isoformat(),
         "title": "Worked",
         "hours_spent": 2,
-        "category_id": category.id,
+        **refs.ids(),
         **kw,
     }
 
@@ -138,38 +141,41 @@ async def test_task_must_belong_to_author(client: AsyncClient, db: AsyncSession)
 
 async def test_project_and_category_copied_from_task(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
-    category, project = await make_category(db), await make_project(db)
+    refs = await make_linked(db)
+    category, project = refs.category, refs.project
     task = await make_task(db, user=me, category_id=category.id, project_id=project.id)
-    resp = await client.post(
-        "/api/logs",
-        json={"log_date": TODAY.isoformat(), "title": "T", "hours_spent": 1, "task_id": task.id},
-    )
+    base = {"log_date": TODAY.isoformat(), "hours_spent": 1, "activity_id": refs.activity.id}
+    resp = await client.post("/api/logs", json={**base, "task_id": task.id})
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["category"]["id"] == category.id
     assert body["project"]["id"] == project.id
     assert body["task"] == {"id": task.id, "title": task.title}
 
-    # Explicit values win; an explicit null project stays null.
+    # Explicit values win.
     other = await make_category(db)
+    project.categories.append(other)
+    await db.flush()
     resp = await client.post(
-        "/api/logs",
-        json={
-            "log_date": TODAY.isoformat(),
-            "title": "T",
-            "hours_spent": 1,
-            "task_id": task.id,
-            "category_id": other.id,
-            "project_id": None,
-        },
+        "/api/logs", json={**base, "task_id": task.id, "category_id": other.id}
     )
+    assert resp.status_code == 201, resp.text
     assert resp.json()["category"]["id"] == other.id
-    assert resp.json()["project"] is None
+    # An explicit null project is not replaced by the task's: new rows need a project.
+    resp = await client.post("/api/logs", json={**base, "task_id": task.id, "project_id": None})
+    assert resp.status_code == 422
+    assert "project_id" in resp.json()["error"]["fields"]
 
 
 async def test_category_required_without_task(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
-    body = {"log_date": TODAY.isoformat(), "title": "T", "hours_spent": 1}
+    refs = await make_linked(db)
+    body = {
+        "log_date": TODAY.isoformat(),
+        "hours_spent": 1,
+        "project_id": refs.project.id,
+        "activity_id": refs.activity.id,
+    }
     resp = await client.post("/api/logs", json=body)
     assert resp.status_code == 422
     assert "category_id" in resp.json()["error"]["fields"]

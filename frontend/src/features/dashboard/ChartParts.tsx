@@ -96,8 +96,8 @@ export function ChartTable({
   rows,
 }: {
   caption: string
-  columns: [string, string]
-  rows: { key: string; label: string; value: string }[]
+  columns: [string, string] | [string, string, string]
+  rows: { key: string; label: string; value: string; extra?: string }[]
 }) {
   return (
     <table className="sr-only">
@@ -106,6 +106,7 @@ export function ChartTable({
         <tr>
           <th scope="col">{columns[0]}</th>
           <th scope="col">{columns[1]}</th>
+          {columns[2] && <th scope="col">{columns[2]}</th>}
         </tr>
       </thead>
       <tbody>
@@ -113,6 +114,7 @@ export function ChartTable({
           <tr key={row.key}>
             <th scope="row">{row.label}</th>
             <td>{row.value}</td>
+            {columns[2] && <td>{row.extra}</td>}
           </tr>
         ))}
       </tbody>

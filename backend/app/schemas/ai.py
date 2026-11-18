@@ -14,8 +14,11 @@ DraftText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=LOG_DRAFT_MAX_CHARS)
 ]
 
-LogDraftField = Literal["title", "log_date", "hours_spent", "category_id"]
-"""Fields a prod log needs that the draft may lack."""
+LogDraftField = Literal[
+    "log_date", "work_setup_id", "category_id", "project_id", "activity_id", "hours"
+]
+"""Fields a prod log needs that the draft may lack. `hours`: neither planned nor actual
+hours."""
 
 
 class LogDraftRequest(BaseModel):
@@ -25,15 +28,24 @@ class LogDraftRequest(BaseModel):
 
 class LogDraftOut(BaseModel):
     """A prod log draft for the user to review. Every ID is active and usable by the
-    caller; anything the AI could not determine is null and listed in `missing_fields`."""
+    caller and fits the linked-dropdown rules; anything the AI could not determine is
+    null, and required ones are listed in `missing_fields`."""
 
-    title: str | None
-    description: str | None
     log_date: date | None
+    work_setup_id: int | None
+    """The default work set-up unless the text says otherwise."""
+    planned_hours: HoursOut | None
     hours_spent: HoursOut | None
+    category_id: int | None
+    project_id: int | None
+    """Linked to the category."""
+    activity_id: int | None
+    """Offered for the project (its activity group)."""
+    om_project_id: int | None
+    """Only when the category offers "Project (For O&M)"."""
     task_id: int | None
     """One of the caller's own open tasks."""
-    project_id: int | None
-    category_id: int | None
+    title: str | None
+    description: str | None
     missing_fields: list[LogDraftField]
     """Required fields that are still null; the form highlights them."""

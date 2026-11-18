@@ -8,6 +8,7 @@
 import { useState, type ReactNode } from 'react'
 
 import {
+  useTeamHoursByActivity,
   useTeamHoursByCategory,
   useTeamHoursByMember,
   useTeamHoursByProject,
@@ -209,6 +210,7 @@ export default function TeamDashboard({ teamId }: { teamId: number }) {
   const byMember = useTeamHoursByMember(teamId, range)
   const byProject = useTeamHoursByProject(teamId, range)
   const byCategory = useTeamHoursByCategory(teamId, range)
+  const byActivity = useTeamHoursByActivity(teamId, range)
   const tasks = useTeamTaskCounts(teamId, range)
 
   return (
@@ -308,6 +310,28 @@ export default function TeamDashboard({ teamId }: { teamId: number }) {
                       key: String(item.category.id),
                       label: item.category.label,
                       note: item.category.is_active ? undefined : 'inactive',
+                      hours: item.hours,
+                    }))}
+                  />
+                )}
+              </ChartCard>
+            )}
+          </AsyncState>
+          <AsyncState query={byActivity} skeleton={<SkeletonChart />}>
+            {() => (
+              <ChartCard
+                title="Hours by activity"
+                aside={`Total ${formatHours(byActivity.data!.total)}`}
+              >
+                {byActivity.data!.items.length === 0 ? (
+                  <NoHours title="No hours in this range" />
+                ) : (
+                  <HoursBarChart
+                    caption="Hours by activity"
+                    items={byActivity.data!.items.map((item) => ({
+                      key: String(item.activity.id),
+                      label: item.activity.label,
+                      note: item.activity.is_active ? undefined : 'inactive',
                       hours: item.hours,
                     }))}
                   />

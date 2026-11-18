@@ -13,6 +13,7 @@ from app.core.dependencies import CurrentUser
 from app.db.session import SessionDep
 from app.schemas.dashboard import (
     DateRangeQuery,
+    HoursByActivity,
     HoursByCategory,
     HoursByMember,
     HoursByProject,
@@ -71,6 +72,13 @@ async def hours_by_category(
     team_id: int, params: RangeParams, user: CurrentUser, db: SessionDep
 ) -> HoursByCategory:
     return await service.team_hours_by_category(db, user, team_id, params)
+
+
+@router.get("/hours/by-activity", response_model=HoursByActivity)
+async def hours_by_activity(
+    team_id: int, params: RangeParams, user: CurrentUser, db: SessionDep
+) -> HoursByActivity:
+    return await service.team_hours_by_activity(db, user, team_id, params)
 
 
 @router.get("/tasks", response_model=TeamTaskCounts)

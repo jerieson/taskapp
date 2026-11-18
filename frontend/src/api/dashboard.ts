@@ -6,10 +6,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import { api, type Schemas } from './client'
 
-export type HoursPerDay = Schemas['HoursPerDay']
+export type HoursPerDay = Schemas['PersonalHoursPerDay']
 export type HoursPerWeek = Schemas['HoursPerWeek']
 export type HoursByProject = Schemas['HoursByProject']
 export type HoursByCategory = Schemas['HoursByCategory']
+export type HoursByActivity = Schemas['HoursByActivity']
 export type TaskCounts = Schemas['TaskCounts']
 
 /** Inclusive calendar dates, "YYYY-MM-DD". */
@@ -24,6 +25,7 @@ export const dashboardKeys = {
   weekly: ['dashboard', 'weekly'] as const,
   byProject: (r: DateRange) => ['dashboard', 'by-project', r.from, r.to] as const,
   byCategory: (r: DateRange) => ['dashboard', 'by-category', r.from, r.to] as const,
+  byActivity: (r: DateRange) => ['dashboard', 'by-activity', r.from, r.to] as const,
   tasks: (r: DateRange) => ['dashboard', 'tasks', r.from, r.to] as const,
 }
 
@@ -63,6 +65,15 @@ export function useHoursByCategory(range: DateRange) {
   })
 }
 
+export function useHoursByActivity(range: DateRange) {
+  return useQuery({
+    queryKey: dashboardKeys.byActivity(range),
+    queryFn: () =>
+      api.get<HoursByActivity>('/dashboard/hours/by-activity', { query: rangeQuery(range) }),
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function useTaskCounts(range: DateRange) {
   return useQuery({
     queryKey: dashboardKeys.tasks(range),
@@ -91,6 +102,8 @@ export const teamDashboardKeys = {
     ['dashboard', 'team', teamId, 'by-project', r.from, r.to] as const,
   byCategory: (teamId: number, r: DateRange) =>
     ['dashboard', 'team', teamId, 'by-category', r.from, r.to] as const,
+  byActivity: (teamId: number, r: DateRange) =>
+    ['dashboard', 'team', teamId, 'by-activity', r.from, r.to] as const,
   tasks: (teamId: number, r: DateRange) =>
     ['dashboard', 'team', teamId, 'tasks', r.from, r.to] as const,
 }
@@ -135,6 +148,17 @@ export function useTeamHoursByCategory(teamId: number, range: DateRange) {
     queryKey: teamDashboardKeys.byCategory(teamId, range),
     queryFn: () =>
       api.get<HoursByCategory>(teamPath(teamId, 'hours/by-category'), {
+        query: rangeQuery(range),
+      }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useTeamHoursByActivity(teamId: number, range: DateRange) {
+  return useQuery({
+    queryKey: teamDashboardKeys.byActivity(teamId, range),
+    queryFn: () =>
+      api.get<HoursByActivity>(teamPath(teamId, 'hours/by-activity'), {
         query: rangeQuery(range),
       }),
     placeholderData: keepPreviousData,

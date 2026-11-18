@@ -11,10 +11,11 @@ from app.core.dependencies import CurrentUser
 from app.db.session import SessionDep
 from app.schemas.dashboard import (
     DateRangeQuery,
+    HoursByActivity,
     HoursByCategory,
     HoursByProject,
-    HoursPerDay,
     HoursPerWeek,
+    PersonalHoursPerDay,
     TaskCounts,
     WeekQuery,
 )
@@ -29,14 +30,14 @@ def _today(settings: SettingsDep) -> date:
     return datetime.now(settings.tz).date()
 
 
-@router.get("/hours/daily", response_model=HoursPerDay)
+@router.get("/hours/daily", response_model=PersonalHoursPerDay)
 async def hours_per_day(
     params: Annotated[WeekQuery, Query()],
     user: CurrentUser,
     db: SessionDep,
     settings: SettingsDep,
-) -> HoursPerDay:
-    """Hours logged on each day of one week (Monday to Sunday)."""
+) -> PersonalHoursPerDay:
+    """Actual hours on each day of one week (Monday to Sunday), with planned hours."""
     return await service.personal_hours_per_day(db, user, params.week or _today(settings))
 
 
@@ -58,6 +59,13 @@ async def hours_by_category(
     params: RangeParams, user: CurrentUser, db: SessionDep
 ) -> HoursByCategory:
     return await service.personal_hours_by_category(db, user, params)
+
+
+@router.get("/hours/by-activity", response_model=HoursByActivity)
+async def hours_by_activity(
+    params: RangeParams, user: CurrentUser, db: SessionDep
+) -> HoursByActivity:
+    return await service.personal_hours_by_activity(db, user, params)
 
 
 @router.get("/tasks", response_model=TaskCounts)

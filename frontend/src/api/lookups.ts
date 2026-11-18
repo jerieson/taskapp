@@ -19,6 +19,8 @@ export type ActivityGroup = Schemas['ActivityGroupOut']
 export type OmProject = Schemas['OmProjectOut']
 export type Project = Schemas['ProjectOut']
 export type DataTabImport = Schemas['DataTabImportOut']
+export type LogOptions = Schemas['LogOptionsOut']
+export type LogOptionProject = Schemas['LogOptionProject']
 
 export type LookupKind =
   | 'categories'
@@ -87,6 +89,7 @@ export const lookupKeys = {
   list: (kind: LookupKind | 'projects', includeInactive: boolean) =>
     ['lookups', kind, { includeInactive }] as const,
   projectPage: (offset: number) => ['lookups', 'projects', 'page', offset] as const,
+  logOptions: ['lookups', 'log-options'] as const,
 }
 
 // ------------------------------------------------------------------ dropdown values
@@ -108,7 +111,12 @@ export function useLookups<K extends LookupKind>(kind: K, includeInactive = fals
 
 function useInvalidate(kind: LookupKind | 'projects') {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: lookupKeys.kind(kind) })
+  // Every dropdown change can change what the log form offers.
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: lookupKeys.kind(kind) }),
+      queryClient.invalidateQueries({ queryKey: lookupKeys.logOptions }),
+    ])
 }
 
 export function useCreateLookup<K extends LookupKind>(kind: K) {
@@ -195,7 +203,25 @@ export function useReorderLookups(kind: LookupKind) {
     onError: (_error, _ids, context) => {
       if (context?.previous) queryClient.setQueryData(key, context.previous)
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: lookupKeys.kind(kind) }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: lookupKeys.kind(kind) }),
+        queryClient.invalidateQueries({ queryKey: lookupKeys.logOptions }),
+      ]),
+  })
+}
+
+// ------------------------------------------------------------------ log form options
+
+/**
+ * Everything the prod log form needs for its linked dropdowns (category -> projects ->
+ * activities, O&M projects, work set-ups), active values only, in display order.
+ */
+export function useLogOptions() {
+  return useQuery({
+    queryKey: lookupKeys.logOptions,
+    queryFn: () => api.get<LogOptions>('/log-options'),
+    staleTime: 5 * 60 * 1000,
   })
 }
 

@@ -30,10 +30,11 @@ import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { SkeletonForm } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
-import { formatDay, formatHours } from '../../lib/format'
+import { formatDay } from '../../lib/format'
 import { memberNote } from '../../lib/labels'
 import LogFormBody from './LogForm'
 import LogList, { LogListSkeleton } from './LogList'
+import { logHours, logLabel } from './logText'
 
 interface FilterState {
   member: string
@@ -41,9 +42,17 @@ interface FilterState {
   dateTo: string
   project: string
   category: string
+  activity: string
 }
 
-const NO_FILTERS: FilterState = { member: '', dateFrom: '', dateTo: '', project: '', category: '' }
+const NO_FILTERS: FilterState = {
+  member: '',
+  dateFrom: '',
+  dateTo: '',
+  project: '',
+  category: '',
+  activity: '',
+}
 
 const optionalId = (value: string) => (value ? Number(value) : undefined)
 
@@ -54,6 +63,7 @@ function toTeamFilters(f: FilterState): TeamLogFilters {
     date_to: f.dateTo || undefined,
     project_id: optionalId(f.project),
     category_id: optionalId(f.category),
+    activity_id: optionalId(f.activity),
   }
 }
 
@@ -117,6 +127,13 @@ function Filters({
         allLabel="Any category"
         value={value.category}
         onChange={(category) => set({ category })}
+      />
+      <LookupFilter
+        kind="activities"
+        label="Activity"
+        allLabel="Any activity"
+        value={value.activity}
+        onChange={(activity) => set({ activity })}
       />
     </FilterPanel>
   )
@@ -216,7 +233,7 @@ function TeamLogs({ teamId, description, selector, editorId }: TeamLogsProps) {
     if (!deleting) return
     const log = deleting
     remove.mutate(log.id, {
-      onSuccess: () => toast.success(`“${log.title}” deleted`),
+      onSuccess: () => toast.success(`“${logLabel(log)}” deleted`),
       onError: (error) => toast.error(errorMessage(error)),
       onSettled: () => setDeleting(null),
     })
@@ -275,7 +292,7 @@ function TeamLogs({ teamId, description, selector, editorId }: TeamLogsProps) {
                             type="button"
                             className="btn btn-sm btn-ghost"
                             onClick={() => setDeleting(log)}
-                            aria-label={`Delete ${log.title}`}
+                            aria-label={`Delete ${logLabel(log)}`}
                           >
                             <TrashIcon className="size-4" />
                             <span className="sm:hidden">Delete</span>
@@ -319,9 +336,9 @@ function TeamLogs({ teamId, description, selector, editorId }: TeamLogsProps) {
           >
             {deleting && (
               <p>
-                <strong className="break-words">{deleting.title}</strong> by{' '}
-                {deleting.user.username} ({formatHours(deleting.hours_spent)} on{' '}
-                {formatDay(deleting.log_date)}) will be deleted. This cannot be undone.
+                <strong className="break-words">{logLabel(deleting)}</strong> by{' '}
+                {deleting.user.username} ({logHours(deleting)} on {formatDay(deleting.log_date)})
+                will be deleted. This cannot be undone.
               </p>
             )}
           </ConfirmModal>

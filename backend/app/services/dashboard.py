@@ -4,6 +4,9 @@ Every aggregation over prod logs takes a `scope`: the WHERE clause that decides 
 logs are counted. The personal dashboard passes the caller's own logs only
 (`own_logs`); team dashboards pass the team snapshot (`team_logs`) instead.
 
+Hours are actual hours: rows without `hours_spent` (planned only) are left out of
+every aggregation, except the planned hours on the personal daily chart.
+
 Weeks start on Monday. "Today" and task completion dates follow APP_TIMEZONE;
 `log_date` is already a calendar date.
 """
@@ -18,21 +21,24 @@ from sqlalchemy import Date, DateTime, and_, cast, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.models import Category, ProdLog, Project, Status, Task, User
+from app.models import Activity, Category, ProdLog, Project, Status, Task, User
 from app.schemas.dashboard import (
     WEEKS_IN_TREND,
+    ActivityHours,
     CategoryHours,
     DateRangeQuery,
     DayHours,
+    DayPlannedHours,
+    HoursByActivity,
     HoursByCategory,
     HoursByMember,
     HoursByProject,
-    HoursPerDay,
     HoursPerWeek,
     MemberDays,
     MemberHours,
     MemberTaskCounts,
     MemberWeeks,
+    PersonalHoursPerDay,
     ProjectHours,
     TaskCounts,
     TeamHoursPerDay,
@@ -55,6 +61,11 @@ def own_logs(user: User) -> LogScope:
 
 def team_logs(team_id: int) -> LogScope:
     return ProdLog.team_id == team_id
+
+
+def _actual(scope: LogScope) -> LogScope:
+    """Only rows with actual hours."""
+    return and_(scope, ProdLog.hours_spent.is_not(None))
 
 
 def monday_of(day: date) -> date:
@@ -87,20 +98,33 @@ def _week_start(column: Any) -> ColumnElement[date]:
     return cast(func.date_trunc("week", cast(column, DateTime())), Date)
 
 
-async def hours_per_day(db: AsyncSession, scope: LogScope, any_day: date) -> HoursPerDay:
-    """Hours for each day of the week containing `any_day`."""
+async def hours_per_day(db: AsyncSession, scope: LogScope, any_day: date) -> PersonalHoursPerDay:
+    """Actual and planned hours for each day of the week containing `any_day`."""
     days = _week_days(any_day)
     rows = await db.execute(
-        select(ProdLog.log_date, _hours_sum())
+        select(
+            ProdLog.log_date,
+            _hours_sum(),
+            func.coalesce(func.sum(ProdLog.planned_hours), ZERO),
+        )
         .where(scope, ProdLog.log_date.between(days[0], days[-1]))
         .group_by(ProdLog.log_date)
     )
-    by_day: dict[date, Decimal] = dict(rows.all())
-    return HoursPerDay(
+    by_day: dict[date, tuple[Decimal, Decimal]] = {day: (a, p) for day, a, p in rows.all()}
+    out = [
+        DayPlannedHours(
+            date=day,
+            hours=by_day.get(day, (ZERO, ZERO))[0],
+            planned_hours=by_day.get(day, (ZERO, ZERO))[1],
+        )
+        for day in days
+    ]
+    return PersonalHoursPerDay(
         week_start=days[0],
         week_end=days[-1],
-        days=[DayHours(date=day, hours=by_day.get(day, ZERO)) for day in days],
-        total=sum(by_day.values(), ZERO),
+        days=out,
+        total=sum((d.hours for d in out), ZERO),
+        planned_total=sum((d.planned_hours for d in out), ZERO),
     )
 
 
@@ -112,7 +136,10 @@ async def hours_per_week(
     week_start = _week_start(ProdLog.log_date)
     rows = await db.execute(
         select(week_start, _hours_sum())
-        .where(scope, ProdLog.log_date.between(all_weeks[0], all_weeks[-1] + timedelta(days=6)))
+        .where(
+            _actual(scope),
+            ProdLog.log_date.between(all_weeks[0], all_weeks[-1] + timedelta(days=6)),
+        )
         .group_by(week_start)
     )
     by_week: dict[date, Decimal] = dict(rows.all())
@@ -132,7 +159,7 @@ async def hours_by_project(
         select(Project, hours)
         .select_from(ProdLog)
         .outerjoin(Project, Project.id == ProdLog.project_id)
-        .where(scope, _in_range(rng))
+        .where(_actual(scope), _in_range(rng))
         .group_by(Project.id)
         .order_by(hours.desc(), Project.name.nulls_last())
     )
@@ -158,7 +185,7 @@ async def hours_by_category(
     rows = await db.execute(
         select(Category, hours)
         .join(ProdLog, ProdLog.category_id == Category.id)
-        .where(scope, _in_range(rng))
+        .where(_actual(scope), _in_range(rng))
         .group_by(Category.id)
         .order_by(hours.desc(), Category.sort_order, Category.label)
     )
@@ -167,6 +194,29 @@ async def hours_by_category(
         for category, total in rows.all()
     ]
     return HoursByCategory(
+        date_from=rng.date_from,
+        date_to=rng.date_to,
+        items=items,
+        total=sum((item.hours for item in items), ZERO),
+    )
+
+
+async def hours_by_activity(
+    db: AsyncSession, scope: LogScope, rng: DateRangeQuery
+) -> HoursByActivity:
+    hours = _hours_sum().label("hours")
+    rows = await db.execute(
+        select(Activity, hours)
+        .join(ProdLog, ProdLog.activity_id == Activity.id)
+        .where(_actual(scope), _in_range(rng))
+        .group_by(Activity.id)
+        .order_by(hours.desc(), Activity.sort_order, Activity.label)
+    )
+    items = [
+        ActivityHours(activity=LookupRef.model_validate(activity), hours=total)
+        for activity, total in rows.all()
+    ]
+    return HoursByActivity(
         date_from=rng.date_from,
         date_to=rng.date_to,
         items=items,
@@ -213,7 +263,9 @@ async def task_counts(
 # ---------------------------------------------------------------- personal dashboard
 
 
-async def personal_hours_per_day(db: AsyncSession, user: User, any_day: date) -> HoursPerDay:
+async def personal_hours_per_day(
+    db: AsyncSession, user: User, any_day: date
+) -> PersonalHoursPerDay:
     return await hours_per_day(db, own_logs(user), any_day)
 
 
@@ -231,6 +283,12 @@ async def personal_hours_by_category(
     db: AsyncSession, user: User, rng: DateRangeQuery
 ) -> HoursByCategory:
     return await hours_by_category(db, own_logs(user), rng)
+
+
+async def personal_hours_by_activity(
+    db: AsyncSession, user: User, rng: DateRangeQuery
+) -> HoursByActivity:
+    return await hours_by_activity(db, own_logs(user), rng)
 
 
 # ---------------------------------------------------------------- team dashboard
@@ -267,7 +325,7 @@ async def _hours_by_user(
     """{user_id: {bucket: hours}} for logs dated start..end."""
     rows = await db.execute(
         select(ProdLog.user_id, bucket, _hours_sum())
-        .where(scope, ProdLog.log_date.between(start, end))
+        .where(_actual(scope), ProdLog.log_date.between(start, end))
         .group_by(ProdLog.user_id, bucket)
     )
     out: dict[int, dict[date, Decimal]] = defaultdict(dict)
@@ -340,7 +398,7 @@ async def team_hours_by_member(
     await check_team_access(db, user, team_id)
     rows = await db.execute(
         select(ProdLog.user_id, _hours_sum())
-        .where(team_logs(team_id), _in_range(rng))
+        .where(_actual(team_logs(team_id)), _in_range(rng))
         .group_by(ProdLog.user_id)
     )
     by_user: dict[int, Decimal] = dict(rows.all())
@@ -369,6 +427,13 @@ async def team_hours_by_category(
 ) -> HoursByCategory:
     await check_team_access(db, user, team_id)
     return await hours_by_category(db, team_logs(team_id), rng)
+
+
+async def team_hours_by_activity(
+    db: AsyncSession, user: User, team_id: int, rng: DateRangeQuery
+) -> HoursByActivity:
+    await check_team_access(db, user, team_id)
+    return await hours_by_activity(db, team_logs(team_id), rng)
 
 
 async def team_task_counts(

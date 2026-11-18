@@ -1,8 +1,9 @@
-"""Natural-language log entry: turn free text into a draft prod log. Nothing is saved;
-the frontend pre-fills the normal log form and the user confirms.
+"""Natural-language log entry: turn free text into a draft prod log row. Nothing is
+saved; the frontend pre-fills the normal log form and the user confirms.
 
-The model only sees the caller's own open tasks and active categories/projects, and
-every ID it returns is checked again against those sets before it reaches the client.
+The model only sees the caller's own open tasks and the active dropdown values (the
+same set the log form offers), and every ID it returns is checked again against those
+sets and the linked-dropdown rules before it reaches the client.
 """
 
 from datetime import date
@@ -13,34 +14,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIClient
 from app.ai.prompts.nl_log_entry import SYSTEM, LogDraftLLM, build_prompt
-from app.models import Category, Project, Status, Task, User
+from app.models import Status, Task, User
 from app.models.enums import AIFeature
 from app.schemas.ai import LogDraftField, LogDraftOut
+from app.schemas.lookups import LogOptionProject, LogOptionsOut
 from app.schemas.prod_logs import MAX_DAILY_HOURS
 from app.schemas.tasks import Description, Title
+from app.services.log_options import get_log_options
 
 # Bounds the prompt size for users with very many open tasks (most recent first).
 MAX_TASKS_IN_PROMPT = 100
 MAX_TITLE = Title.__metadata__[0].max_length or 200
 MAX_DESCRIPTION = Description.__metadata__[0].max_length or 10000
-
-_REQUIRED: tuple[LogDraftField, ...] = ("title", "log_date", "hours_spent", "category_id")
-
-
-async def _active_categories(db: AsyncSession) -> dict[int, str]:
-    rows = await db.execute(
-        select(Category.id, Category.label)
-        .where(Category.is_active)
-        .order_by(Category.sort_order, Category.id)
-    )
-    return {row.id: row.label for row in rows}
-
-
-async def _active_projects(db: AsyncSession) -> dict[int, str]:
-    rows = await db.execute(
-        select(Project.id, Project.name).where(Project.is_active).order_by(Project.name)
-    )
-    return {row.id: row.name for row in rows}
 
 
 async def _open_tasks(db: AsyncSession, user: User) -> dict[int, Task]:
@@ -77,22 +62,64 @@ def _hours(value: float | None) -> Decimal | None:
     return hours if Decimal(0) < hours <= MAX_DAILY_HOURS else None
 
 
-def _pick(value: int | None, allowed: dict[int, object]) -> int | None:
-    return value if value in allowed else None
+def _prompt_context(options: LogOptionsOut) -> dict[str, list[dict[str, object]]]:
+    return {
+        "categories": [
+            {"id": c.id, "label": c.label, "offers_om_project": c.requires_om_project}
+            for c in options.categories
+        ],
+        "projects": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "category_ids": p.category_ids,
+                "activity_group_id": p.activity_group_id,
+            }
+            for p in options.projects
+        ],
+        "activity_groups": [
+            {"id": g.id, "activity_ids": g.activity_ids} for g in options.activity_groups
+        ],
+        "activities": [{"id": a.id, "label": a.label} for a in options.activities],
+        "om_projects": [{"id": o.id, "label": o.label} for o in options.om_projects],
+        "work_setups": [{"id": w.id, "label": w.label} for w in options.work_setups],
+    }
+
+
+class _Linked:
+    """The active values and their links, as the log form sees them."""
+
+    def __init__(self, options: LogOptionsOut) -> None:
+        self.categories = {c.id: c for c in options.categories}
+        self.projects: dict[int, LogOptionProject] = {p.id: p for p in options.projects}
+        self.activities = {a.id for a in options.activities}
+        self.om_projects = {o.id for o in options.om_projects}
+        self.work_setups = {w.id for w in options.work_setups}
+        self.default_work_setup = next((w.id for w in options.work_setups if w.is_default), None)
+        self.group_activities = {g.id: set(g.activity_ids) for g in options.activity_groups}
+
+    def project_fits(self, project_id: int | None, category_id: int | None) -> bool:
+        project = self.projects.get(project_id) if project_id is not None else None
+        if project is None:
+            return False
+        return category_id is None or category_id in project.category_ids
+
+    def activity_fits(self, activity_id: int, project_id: int | None) -> bool:
+        if project_id is None:
+            return True  # nothing to check against yet; the form asks for a project
+        group = self.projects[project_id].activity_group_id
+        return group is not None and activity_id in self.group_activities.get(group, set())
 
 
 async def draft_log(
     db: AsyncSession, ai: AIClient, user: User, text: str, today: date
 ) -> LogDraftOut:
-    categories = await _active_categories(db)
-    projects = await _active_projects(db)
+    options = await get_log_options(db)
     tasks = await _open_tasks(db, user)
-    task_info = {t.id: (t.project_id, t.category_id) for t in tasks.values()}
     prompt = build_prompt(
         text=text,
         today=today,
-        categories=list(categories.items()),
-        projects=list(projects.items()),
+        **_prompt_context(options),
         tasks=[(t.id, t.title) for t in tasks.values()],
     )
 
@@ -100,24 +127,54 @@ async def draft_log(
         user, AIFeature.NL_LOG_ENTRY, system=SYSTEM, prompt=prompt, schema=LogDraftLLM
     )
 
-    task_id = _pick(raw.task_id, task_info)
-    project_id = _pick(raw.project_id, projects)
-    category_id = _pick(raw.category_id, categories)
+    linked = _Linked(options)
+    task_id = raw.task_id if raw.task_id in tasks else None
+    category_id = raw.category_id if raw.category_id in linked.categories else None
+    project_id = raw.project_id if linked.project_fits(raw.project_id, category_id) else None
     if task_id is not None:
         # Same as the log form: a chosen task pre-fills project and category.
-        task_project, task_category = task_info[task_id]
-        project_id = project_id or _pick(task_project, projects)
-        category_id = category_id or _pick(task_category, categories)
+        task = tasks[task_id]
+        if category_id is None and task.category_id in linked.categories:
+            category_id = task.category_id
+        if project_id is None and linked.project_fits(task.project_id, category_id):
+            project_id = task.project_id
+    if category_id is None and project_id is not None:
+        only = linked.projects[project_id].category_ids
+        category_id = only[0] if len(only) == 1 else None
+    activity_id = raw.activity_id if raw.activity_id in linked.activities else None
+    if activity_id is not None and not linked.activity_fits(activity_id, project_id):
+        activity_id = None
+    om_project_id = raw.om_project_id if raw.om_project_id in linked.om_projects else None
+    category = linked.categories.get(category_id) if category_id is not None else None
+    if category is None or not category.requires_om_project:
+        om_project_id = None
+    work_setup_id = (
+        raw.work_setup_id if raw.work_setup_id in linked.work_setups else None
+    ) or linked.default_work_setup
 
     draft = LogDraftOut(
+        log_date=_date(raw.log_date),
+        work_setup_id=work_setup_id,
+        planned_hours=_hours(raw.planned_hours),
+        hours_spent=_hours(raw.hours_spent),
+        category_id=category_id,
+        project_id=project_id,
+        activity_id=activity_id,
+        om_project_id=om_project_id,
+        task_id=task_id,
         title=_text(raw.title, MAX_TITLE),
         description=_text(raw.description, MAX_DESCRIPTION),
-        log_date=_date(raw.log_date),
-        hours_spent=_hours(raw.hours_spent),
-        task_id=task_id,
-        project_id=project_id,
-        category_id=category_id,
         missing_fields=[],
     )
-    draft.missing_fields = [f for f in _REQUIRED if getattr(draft, f) is None]
+    draft.missing_fields = _missing(draft)
     return draft
+
+
+def _missing(draft: LogDraftOut) -> list[LogDraftField]:
+    missing: list[LogDraftField] = []
+    for field in ("log_date", "work_setup_id", "category_id", "project_id", "activity_id"):
+        if getattr(draft, field) is None:
+            missing.append(field)
+    if draft.planned_hours is None and draft.hours_spent is None:
+        missing.append("hours")
+    return missing

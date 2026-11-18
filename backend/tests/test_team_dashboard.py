@@ -137,6 +137,27 @@ async def test_hours_for_team_and_members(client: AsyncClient, db: AsyncSession)
     ]
     categories = await _get(client, team_id, "hours/by-category", **RANGE)
     assert categories["total"] == 8.5
+    activities = await _get(client, team_id, "hours/by-activity", **RANGE)
+    assert activities["total"] == 8.5
+    assert len(activities["items"]) == 3  # one new activity per row in range (factory)
+
+
+async def test_rows_without_actual_hours_are_ignored(client: AsyncClient, db: AsyncSession) -> None:
+    manager = await login_as(client, db, role=Role.MANAGER)
+    team_id = manager.team_id
+    assert team_id is not None
+    planner = await make_user(db, team_id=team_id, is_active=False)  # listed only with hours
+    await make_log(db, user=planner, log_date=MONDAY, hours_spent=None, planned_hours=Decimal(8))
+    await _log(db, manager, MONDAY, "2")
+
+    daily = await _get(client, team_id, "hours/daily", week=MONDAY.isoformat())
+    assert daily["total"] == 2
+    assert planner.id not in [m["member"]["id"] for m in daily["members"]]
+    for path in ("by-member", "by-project", "by-category", "by-activity"):
+        body = await _get(client, team_id, f"hours/{path}", **RANGE)
+        assert body["total"] == 2, path
+    members = await _get(client, team_id, "hours/by-member", **RANGE)
+    assert planner.id not in _member_hours(members["items"])
 
 
 async def test_hours_per_week(client: AsyncClient, db: AsyncSession) -> None:

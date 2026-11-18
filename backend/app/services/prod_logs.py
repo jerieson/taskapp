@@ -13,23 +13,46 @@ Rules enforced here:
 - `updated_by` is the caller on every create and update.
 - A linked task must belong to the log's author. Its project/category are copied onto a
   new log when those are omitted.
-- The author's total hours on one date may not exceed 24.
-- Only active categories/projects can be chosen; on update the current value may stay.
+- New rows need a category, project, activity and work set-up (the default one when
+  omitted), and planned hours, actual hours or both.
+- Linked dropdowns: the project must be linked to the category, the activity must be in
+  the project's activity group, and an O&M project is only allowed when the category
+  offers one. On update, a pair that is unchanged may stay even if the admin has since
+  removed the link.
+- The author's total actual hours on one date may not exceed 24, and separately their
+  total planned hours.
+- Only active values can be chosen; on update the current value may stay.
+- For now a row is "planned" exactly when it has planned hours (the weekly planning
+  deadline replaces this rule later).
 """
 
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import Row, Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 
 from app.core.errors import AppError
 from app.core.pagination import Page, PaginationParams
-from app.models import Category, ProdLog, Project, Role, Task, Team, User
+from app.models import (
+    Activity,
+    ActivityGroupMember,
+    Category,
+    OmProject,
+    ProdLog,
+    Project,
+    Role,
+    Task,
+    Team,
+    User,
+    WorkSetup,
+)
 from app.schemas.prod_logs import (
     MAX_DAILY_HOURS,
+    PlainRef,
     ProdLogCreate,
     ProdLogListItem,
     ProdLogOut,
@@ -48,35 +71,78 @@ logger = logging.getLogger("app.prod_logs")
 Author = aliased(User, name="author")
 Editor = aliased(User, name="editor")
 
-_LogRow = tuple[ProdLog, Category, Project | None, User, User, int | None, str | None]
+_LogRow = tuple[
+    ProdLog,
+    Category,
+    Project | None,
+    User,
+    User,
+    WorkSetup,
+    Activity,
+    OmProject | None,
+    int | None,
+    str | None,
+]
+_ROW_LEN = 10
 
 
 def _base_query() -> Select[_LogRow]:
     return (
-        select(ProdLog, Category, Project, Author, Editor, Task.id, Task.title)
+        select(
+            ProdLog,
+            Category,
+            Project,
+            Author,
+            Editor,
+            WorkSetup,
+            Activity,
+            OmProject,
+            Task.id,
+            Task.title,
+        )
         .join(Category, Category.id == ProdLog.category_id)
         .outerjoin(Project, Project.id == ProdLog.project_id)
         .join(Author, Author.id == ProdLog.user_id)
         .join(Editor, Editor.id == ProdLog.updated_by)
+        .join(WorkSetup, WorkSetup.id == ProdLog.work_setup_id)
+        .join(Activity, Activity.id == ProdLog.activity_id)
+        .outerjoin(OmProject, OmProject.id == ProdLog.om_project_id)
         .outerjoin(Task, Task.id == ProdLog.task_id)
     )
 
 
 def _fields(row: Row[Any], viewer: User) -> dict[str, Any]:
-    log, category, project, author, editor, task_id, task_title = row[:7]
+    (
+        log,
+        category,
+        project,
+        author,
+        editor,
+        work_setup,
+        activity,
+        om_project,
+        task_id,
+        task_title,
+    ) = row[:_ROW_LEN]
     show_task = task_id is not None and log.user_id == viewer.id
     return {
         "id": log.id,
         "user": UserRef.model_validate(author),
         "team_id": log.team_id,
         "log_date": log.log_date,
-        "title": log.title,
-        "description": log.description,
+        "work_setup": LookupRef.model_validate(work_setup),
+        "is_planned": log.is_planned,
+        "planned_hours": log.planned_hours,
+        "hours_spent": log.hours_spent,
+        "category": LookupRef.model_validate(category),
+        "project": ProjectRef.model_validate(project) if project else None,
+        "activity": LookupRef.model_validate(activity),
+        "om_project": PlainRef.model_validate(om_project) if om_project else None,
         "task_id": log.task_id,
         "task": TaskRef(id=task_id, title=task_title) if show_task else None,
-        "project": ProjectRef.model_validate(project) if project else None,
-        "category": LookupRef.model_validate(category),
-        "hours_spent": log.hours_spent,
+        "title": log.title,
+        "description": log.description,
+        "deviation_reason": log.deviation_reason,
         "updated_by": UserRef.model_validate(editor),
         "created_at": log.created_at,
         "updated_at": log.updated_at,
@@ -121,19 +187,99 @@ async def _check_task(db: AsyncSession, task_id: int, author_id: int) -> Task:
     return task
 
 
-async def _check_daily_total(
-    db: AsyncSession, log: ProdLog, hours: Decimal, exclude_id: int | None
-) -> None:
-    """Reject if the author's logs on `log.log_date` would total more than 24 hours.
+async def _default_work_setup(db: AsyncSession) -> int:
+    row_id = await db.scalar(select(WorkSetup.id).where(WorkSetup.is_default, WorkSetup.is_active))
+    if row_id is None:
+        raise AppError(
+            409,
+            "no_default_work_setup",
+            "No default work set-up is set. Ask an admin to set one, or choose a work set-up.",
+        )
+    return row_id
 
-    An advisory lock per author serialises concurrent writes, so two requests cannot
-    both pass the check and together exceed the cap.
+
+def _hours_required() -> AppError:
+    message = "Enter planned hours, actual hours, or both"
+    return AppError(422, "hours_required", message, fields={"hours_spent": message})
+
+
+# ---------------------------------------------------------------- linked dropdowns
+
+
+@dataclass(frozen=True)
+class _Links:
+    category_id: int
+    project_id: int | None
+    activity_id: int
+    om_project_id: int | None
+
+
+async def _check_links(db: AsyncSession, new: _Links, old: _Links | None = None) -> None:
+    """The project is linked to the category, the activity is in the project's group,
+    and an O&M project is only set when the category offers one.
+
+    `old` holds the values already on the log: a pair that is unchanged is not checked
+    again, so a row stays editable after the admin changes the links.
     """
+
+    def unchanged(*names: str) -> bool:
+        return old is not None and all(getattr(new, n) == getattr(old, n) for n in names)
+
+    category = await db.get(Category, new.category_id)
+    project = await db.get(Project, new.project_id) if new.project_id is not None else None
+    if (
+        project is not None
+        and not unchanged("category_id", "project_id")
+        and new.category_id not in project.category_ids
+    ):
+        raise invalid_reference("project_id", "Choose a project under the chosen category")
+    if project is not None and not unchanged("project_id", "activity_id"):
+        in_group = project.activity_group_id is not None and await db.scalar(
+            select(ActivityGroupMember.activity_id).where(
+                ActivityGroupMember.activity_group_id == project.activity_group_id,
+                ActivityGroupMember.activity_id == new.activity_id,
+            )
+        )
+        if not in_group:
+            raise invalid_reference("activity_id", "Choose an activity offered for this project")
+    offers_om = category is not None and category.requires_om_project
+    if (
+        new.om_project_id is not None
+        and not offers_om
+        and not unchanged("category_id", "om_project_id")
+    ):
+        raise invalid_reference(
+            "om_project_id", "Project (For O&M) is only for categories that offer it"
+        )
+
+
+def _links_of(log: ProdLog) -> _Links:
+    return _Links(log.category_id, log.project_id, log.activity_id, log.om_project_id)
+
+
+# ---------------------------------------------------------------- daily caps
+
+
+async def _check_daily_total(
+    db: AsyncSession,
+    log: ProdLog,
+    column: InstrumentedAttribute[Decimal | None],
+    hours: Decimal | None,
+    exclude_id: int | None,
+) -> None:
+    """Reject if the author's `column` hours on `log.log_date` would total more than 24.
+
+    Actual and planned hours are capped separately. An advisory lock per author
+    serialises concurrent writes, so two requests cannot both pass the check and
+    together exceed the cap.
+    """
+    if hours is None:
+        return
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
         {"key": f"prod_logs:user:{log.user_id}"},
     )
-    stmt = select(func.coalesce(func.sum(ProdLog.hours_spent), 0)).where(
+    stmt = select(func.coalesce(func.sum(column), 0)).where(
         ProdLog.user_id == log.user_id, ProdLog.log_date == log.log_date
     )
     if exclude_id is not None:
@@ -141,8 +287,9 @@ async def _check_daily_total(
     others = Decimal(await db.scalar(stmt) or 0)
     if others + hours > MAX_DAILY_HOURS:
         left = max(MAX_DAILY_HOURS - others, Decimal(0))
-        message = f"Max {MAX_DAILY_HOURS:g} h per day: {others:g} h already logged, {left:g} h left"
-        raise AppError(422, "daily_hours_exceeded", message, fields={"hours_spent": message})
+        kind = "planned" if column is ProdLog.planned_hours else "logged"
+        message = f"Max {MAX_DAILY_HOURS:g} h per day: {others:g} h already {kind}, {left:g} h left"
+        raise AppError(422, "daily_hours_exceeded", message, fields={column.key: message})
 
 
 async def _active_or_none(db: AsyncSession, field: str, value: int | None) -> int | None:
@@ -162,16 +309,24 @@ async def _active_or_none(db: AsyncSession, field: str, value: int | None) -> in
 async def _page(
     db: AsyncSession, stmt: Select[_LogRow], params: PaginationParams, viewer: User
 ) -> Page[ProdLogListItem]:
-    day_total = func.sum(ProdLog.hours_spent).over(partition_by=ProdLog.log_date)
+    def day_sum(column: InstrumentedAttribute[Decimal | None]) -> Any:
+        return func.coalesce(func.sum(column).over(partition_by=ProdLog.log_date), 0)
+
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = await db.execute(
-        stmt.add_columns(day_total)
+        stmt.add_columns(day_sum(ProdLog.hours_spent), day_sum(ProdLog.planned_hours))
         .order_by(ProdLog.log_date.desc(), ProdLog.created_at.desc(), ProdLog.id.desc())
         .limit(params.limit)
         .offset(params.offset)
     )
     items = [
-        ProdLogListItem.model_validate({**_fields(row, viewer), "day_total_hours": row[7]})
+        ProdLogListItem.model_validate(
+            {
+                **_fields(row, viewer),
+                "day_total_hours": row[_ROW_LEN],
+                "day_planned_hours": row[_ROW_LEN + 1],
+            }
+        )
         for row in rows.all()
     ]
     return Page[ProdLogListItem].build(items, total, params)
@@ -186,6 +341,8 @@ def _filter(stmt: Select[_LogRow], params: ProdLogQuery | TeamLogQuery) -> Selec
         stmt = stmt.where(ProdLog.project_id == params.project_id)
     if params.category_id is not None:
         stmt = stmt.where(ProdLog.category_id == params.category_id)
+    if params.activity_id is not None:
+        stmt = stmt.where(ProdLog.activity_id == params.activity_id)
     return stmt
 
 
@@ -260,47 +417,87 @@ async def create_log(db: AsyncSession, user: User, data: ProdLogCreate) -> ProdL
             category_id = await _active_or_none(db, "category_id", task.category_id)
     if category_id is None:
         raise invalid_reference("category_id", "Choose a category")
-    await check_ref(db, "category_id", category_id, keep=None)
-    if project_id is not None:
-        await check_ref(db, "project_id", project_id, keep=None)
+    if project_id is None:
+        raise invalid_reference("project_id", "Choose a project")
+    work_setup_id = data.work_setup_id or await _default_work_setup(db)
+    refs = {
+        "category_id": category_id,
+        "project_id": project_id,
+        "activity_id": data.activity_id,
+        "work_setup_id": work_setup_id,
+        "om_project_id": data.om_project_id,
+    }
+    for field, value in refs.items():
+        if value is not None:
+            await check_ref(db, field, value, keep=None)
+    await _check_links(db, _Links(category_id, project_id, data.activity_id, data.om_project_id))
+    if data.planned_hours is None and data.hours_spent is None:
+        raise _hours_required()
 
     log = ProdLog(
         user_id=user.id,
         team_id=user.team_id,
         task_id=data.task_id,
         log_date=data.log_date,
-        title=data.title,
-        description=data.description or None,
+        work_setup_id=work_setup_id,
+        activity_id=data.activity_id,
         project_id=project_id,
         category_id=category_id,
+        om_project_id=data.om_project_id,
+        is_planned=data.planned_hours is not None,
+        planned_hours=data.planned_hours,
         hours_spent=data.hours_spent,
+        title=data.title or None,
+        description=data.description or None,
+        deviation_reason=data.deviation_reason or None,
         updated_by=user.id,
     )
-    await _check_daily_total(db, log, data.hours_spent, exclude_id=None)
+    await _check_daily_total(db, log, ProdLog.hours_spent, data.hours_spent, exclude_id=None)
+    await _check_daily_total(db, log, ProdLog.planned_hours, data.planned_hours, exclude_id=None)
     db.add(log)
     await db.commit()
     logger.info("prod_log_created", extra={"fields": {"log_id": log.id}})
     return await _load(db, user, log.id)
 
 
+_REF_FIELDS = ("work_setup_id", "category_id", "project_id", "activity_id", "om_project_id")
+_TEXT_FIELDS = ("title", "description", "deviation_reason")
+
+
 async def update_log(db: AsyncSession, user: User, log_id: int, data: ProdLogUpdate) -> ProdLogOut:
     log = await _get_writable(db, user, log_id)
     sent = data.model_fields_set
 
-    for field in ("category_id", "project_id"):
+    # Validate the final values before touching the row, so a rejected update leaves
+    # nothing half-applied in the session.
+    def final(field: str) -> Any:
+        return getattr(data, field) if field in sent else getattr(log, field)
+
+    for field in _REF_FIELDS:
         value = getattr(data, field)
         if field in sent and value is not None:
             await check_ref(db, field, value, keep=getattr(log, field))
     if "task_id" in sent and data.task_id is not None and data.task_id != log.task_id:
         await _check_task(db, data.task_id, log.user_id)
+    new_links = _Links(
+        final("category_id"), final("project_id"), final("activity_id"), final("om_project_id")
+    )
+    await _check_links(db, new_links, _links_of(log))
+    if final("planned_hours") is None and final("hours_spent") is None:
+        raise _hours_required()
 
-    for field in ("log_date", "title", "hours_spent", "task_id", "project_id", "category_id"):
+    for field in ("log_date", "planned_hours", "hours_spent", "task_id", *_REF_FIELDS):
         if field in sent:
             setattr(log, field, getattr(data, field))
-    if "description" in sent:
-        log.description = data.description or None
+    for field in _TEXT_FIELDS:
+        if field in sent:
+            setattr(log, field, getattr(data, field) or None)
+    log.is_planned = log.planned_hours is not None
+
     if sent & {"log_date", "hours_spent"}:
-        await _check_daily_total(db, log, log.hours_spent, exclude_id=log.id)
+        await _check_daily_total(db, log, ProdLog.hours_spent, log.hours_spent, log.id)
+    if sent & {"log_date", "planned_hours"}:
+        await _check_daily_total(db, log, ProdLog.planned_hours, log.planned_hours, log.id)
     log.updated_by = user.id
 
     await db.commit()

@@ -3,9 +3,17 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.models import Category, Priority, Project, Status
+from app.models import Activity, Category, OmProject, Priority, Project, Status, WorkSetup
 
-type RefModel = type[Category] | type[Status] | type[Priority] | type[Project]
+type RefModel = (
+    type[Category]
+    | type[Status]
+    | type[Priority]
+    | type[Project]
+    | type[WorkSetup]
+    | type[Activity]
+    | type[OmProject]
+)
 
 # Request field -> (model, noun used in messages)
 REFS: dict[str, tuple[RefModel, str]] = {
@@ -13,6 +21,9 @@ REFS: dict[str, tuple[RefModel, str]] = {
     "priority_id": (Priority, "priority"),
     "category_id": (Category, "category"),
     "project_id": (Project, "project"),
+    "work_setup_id": (WorkSetup, "work set-up"),
+    "activity_id": (Activity, "activity"),
+    "om_project_id": (OmProject, "O&M project"),
 }
 
 

@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.models import ProcessRun, Role, RunStatus, User
 from tests.auth_helpers import login_as
 from tests.factories import (
+    make_activity,
     make_category,
     make_log,
     make_project,
@@ -55,6 +56,7 @@ async def test_endpoints_require_login(client: AsyncClient) -> None:
     assert (await client.get("/api/dashboard/hours/weekly")).status_code == 401
     assert (await client.get("/api/dashboard/hours/by-project", params=rng)).status_code == 401
     assert (await client.get("/api/dashboard/hours/by-category", params=rng)).status_code == 401
+    assert (await client.get("/api/dashboard/hours/by-activity", params=rng)).status_code == 401
     assert (await client.get("/api/dashboard/tasks", params=rng)).status_code == 401
     assert (await client.get("/api/runs")).status_code == 401
 
@@ -95,7 +97,7 @@ async def test_hours_per_day_covers_one_monday_to_sunday_week(
 
     previous = await _get(client, "hours/daily", week=SUNDAY.isoformat())
     assert previous["week_start"] == "2026-03-02"
-    assert previous["days"][-1] == {"date": "2026-03-08", "hours": 5}
+    assert previous["days"][-1] == {"date": "2026-03-08", "hours": 5, "planned_hours": 0}
     assert previous["total"] == 5
 
 
@@ -166,6 +168,48 @@ async def test_hours_by_project_and_category(client: AsyncClient, db: AsyncSessi
 
 
 # ---------------------------------------------------------------- tasks
+
+
+async def test_actual_hours_only_with_planned_alongside(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    """Rows without actual hours count only toward planned hours on the daily chart."""
+    me = await login_as(client, db)
+    worked, planned_only = await make_activity(db), await make_activity(db)
+    project = await make_project(db)
+    await make_log(
+        db,
+        user=me,
+        log_date=MONDAY,
+        hours_spent=Decimal("2"),
+        planned_hours=Decimal("3"),
+        activity_id=worked.id,
+    )
+    await make_log(
+        db,
+        user=me,
+        log_date=MONDAY,
+        hours_spent=None,
+        planned_hours=Decimal("4"),
+        activity_id=planned_only.id,
+        project_id=project.id,
+    )
+    await _log(db, me, MONDAY + timedelta(days=1), "1.5", activity_id=worked.id)
+
+    daily = await _get(client, "hours/daily", week=MONDAY.isoformat())
+    assert daily["days"][0] == {"date": MONDAY.isoformat(), "hours": 2, "planned_hours": 7}
+    assert daily["days"][1]["planned_hours"] == 0
+    assert (daily["total"], daily["planned_total"]) == (3.5, 7)
+
+    rng = {"date_from": MONDAY.isoformat(), "date_to": (MONDAY + timedelta(days=6)).isoformat()}
+    activities = await _get(client, "hours/by-activity", **rng)
+    assert [(i["activity"]["id"], i["hours"]) for i in activities["items"]] == [(worked.id, 3.5)]
+    assert activities["total"] == 3.5
+    projects = await _get(client, "hours/by-project", **rng)
+    assert [i["project"] for i in projects["items"]] == [None]  # the planned-only project is absent
+    categories = await _get(client, "hours/by-category", **rng)
+    assert categories["total"] == 3.5
+    assert len(categories["items"]) == 2  # one new category per actual row (factory default)
 
 
 async def test_task_counts(client: AsyncClient, db: AsyncSession) -> None:

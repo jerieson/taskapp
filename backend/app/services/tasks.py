@@ -32,7 +32,7 @@ from app.schemas.tasks import (
     TaskState,
     TaskUpdate,
 )
-from app.services.refs import REFS, check_ref
+from app.services.refs import check_ref
 from app.services.run_status import sync_run_status
 
 logger = logging.getLogger("app.tasks")
@@ -163,9 +163,11 @@ async def get_task(db: AsyncSession, user: User, task_id: int, today: date) -> T
 
 # ---------------------------------------------------------------- writes
 
+_TASK_REFS = ("status_id", "priority_id", "category_id", "project_id")
+
 
 async def create_task(db: AsyncSession, user: User, data: TaskCreate, today: date) -> TaskOut:
-    for field in REFS:
+    for field in _TASK_REFS:
         value = getattr(data, field)
         if value is not None:
             await check_ref(db, field, value, keep=None)
@@ -196,7 +198,7 @@ async def update_task(
     task = await _get_own(db, user, task_id)
     sent = data.model_fields_set
 
-    for field in REFS:
+    for field in _TASK_REFS:
         if field in sent:
             value = getattr(data, field)
             if value is not None:
