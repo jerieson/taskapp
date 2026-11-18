@@ -9,12 +9,13 @@ import {
   type TaskSort,
   type TaskState,
 } from '../../api/tasks'
+import { DateField } from '../../components/DateInput'
 import ColorDot from '../../components/ColorDot'
 import ConfirmModal from '../../components/ConfirmModal'
 import DataTable, { type Column } from '../../components/DataTable'
 import EmptyState from '../../components/EmptyState'
 import FilterPanel, { LookupFilter } from '../../components/FilterPanel'
-import { InputField, SelectField } from '../../components/FormField'
+import { SelectField } from '../../components/FormField'
 import {
   CheckSquareIcon,
   FilterIcon,
@@ -124,19 +125,21 @@ function Filters({
         value={value.category}
         onChange={(category) => set({ category })}
       />
-      <InputField
+      <DateField
         label="Due from"
-        type="date"
+        placeholder="Any date"
+        clearable
         value={value.dueFrom}
         max={value.dueTo || undefined}
-        onChange={(event) => set({ dueFrom: event.target.value })}
+        onChange={(dueFrom) => set({ dueFrom })}
       />
-      <InputField
+      <DateField
         label="Due until"
-        type="date"
+        placeholder="Any date"
+        clearable
         value={value.dueTo}
         min={value.dueFrom || undefined}
-        onChange={(event) => set({ dueTo: event.target.value })}
+        onChange={(dueTo) => set({ dueTo })}
       />
       <SelectField
         label="Source"

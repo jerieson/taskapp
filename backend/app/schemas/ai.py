@@ -43,9 +43,6 @@ class LogDraftOut(BaseModel):
     """Offered for the project (its activity group)."""
     om_project_id: int | None
     """Only when the category offers "Project (For O&M)"."""
-    task_id: int | None
-    """One of the caller's own open tasks."""
-    title: str | None
     description: str | None
     missing_fields: list[LogDraftField]
     """Required fields that are still null; the form highlights them."""

@@ -1,8 +1,11 @@
 /*
  * Create / edit form for a prod log row, rendered inside a Modal. Fields follow the
  * team's sheet: Date, Work set-up, Planned hours, Actual hours, Planned/Unplanned,
- * Category, Project, Activity, Project (For O&M), then Task, Note, Reason for deviation
- * and Remarks. Planned and actual hours per day are each capped at WORKDAY_HOURS.
+ * Category, Project, Activity, Project (For O&M), Reason for deviation and Remarks.
+ * Planned and actual hours per day are each capped at WORKDAY_HOURS.
+ *
+ * A new row can cover several days: with "Until" set, the same row is added on every
+ * weekday (Monday to Friday) from Date to Until, all or none (bulk endpoint).
  *
  * The dropdowns are linked (see linkedOptions.ts): changing the category clears a
  * project that is not under it, changing the project clears an activity it does not
@@ -10,39 +13,51 @@
  * already on an edited row stays available while its parent is unchanged, even if it
  * has since been deactivated or unlinked (the backend accepts that too).
  *
- * Choosing a task pre-fills the project and category from it (both stay editable).
- * A new log can also start from a date (and task) (`prefill`, e.g. "Add" on /today) or
- * from an AI draft (`draft`): required fields the AI left empty are highlighted until
- * filled in.
+ * A new row can start from a date (`prefill`, e.g. "Add" on /today), from another row
+ * (`copyFrom`, "Copy": same values and remarks, its hours as planned hours, on the next
+ * weekday) or from an AI draft (`draft`): required fields the AI left empty are
+ * highlighted until filled in.
  *
  * Weekly planning: in a locked week (after the Friday deadline) planned hours are read
  * only, except for admins. Rows are Planned unless the user picks Unplanned.
- * Only the author can link a task: tasks are private, so an admin editing someone
- * else's log keeps the existing link and does not see the task list.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMemo, type ComponentProps, type ReactNode } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
 import type { LogDraft, LogDraftField } from '../../api/ai'
 import { useCurrentUser } from '../../api/auth'
-import { errorMessage } from '../../api/client'
-import { useCreateLog, useUpdateLog, type ProdLog } from '../../api/logs'
+import { ApiError, errorMessage } from '../../api/client'
+import {
+  useCreateLog,
+  useCreateLogs,
+  useUpdateLog,
+  type ProdLog,
+  type ProdLogCreate,
+} from '../../api/logs'
 import { useLogOptions, type LogOptions } from '../../api/lookups'
 import { usePlanningStatus } from '../../api/planning'
-import { useTaskOptions, type Task } from '../../api/tasks'
+import { DateField } from '../../components/DateInput'
 import ErrorAlert from '../../components/ErrorAlert'
-import { SparklesIcon } from '../../components/icons'
 import { InputField, SelectField, SubmitButton, TextareaField } from '../../components/FormField'
+import { SparklesIcon } from '../../components/icons'
 import { SkeletonForm } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
-import { formatDeadline, todayIso } from '../../lib/format'
+import {
+  formatDayRange,
+  formatDeadline,
+  nextWeekday,
+  todayIso,
+  weekdaysBetween,
+} from '../../lib/format'
 import { applyFieldErrors } from '../../lib/forms'
 import { buildLinked, withCurrent, type Choice, type Linked } from './linkedOptions'
 
 const HOURS_PATTERN = /^\d{1,2}(\.\d{1,2})?$/
 const NEED_HOURS = 'Enter planned hours, actual hours, or both'
+/** The bulk endpoint's row limit. */
+const MAX_DAYS = 31
 
 /** Hours on one row: more than 0, at most the daily cap, up to 2 decimals. */
 function hoursField(max: number) {
@@ -55,11 +70,20 @@ function hoursField(max: number) {
     )
 }
 
+function untilError(from: string, until: string): string | null {
+  if (until < from) return 'Choose a day on or after the date'
+  const days = weekdaysBetween(from, until).length
+  if (days === 0) return 'Saturday and Sunday are skipped: choose a range with a weekday'
+  if (days > MAX_DAYS) return `Choose at most ${MAX_DAYS} weekdays`
+  return null
+}
+
 // Mirrors app/schemas/prod_logs.py. Select values are id strings ("" = none).
 function makeSchema(requireProject: boolean, maxHours: number) {
   return z
     .object({
       log_date: z.string().min(1, 'Choose a date'),
+      until: z.string(),
       work_setup_id: z.string().min(1, 'Choose a work set-up'),
       planned_hours: hoursField(maxHours),
       hours_spent: hoursField(maxHours),
@@ -67,8 +91,6 @@ function makeSchema(requireProject: boolean, maxHours: number) {
       project_id: z.string(),
       activity_id: z.string().min(1, 'Choose an activity'),
       om_project_id: z.string(),
-      task_id: z.string(),
-      title: z.string().trim().max(200, 'Use at most 200 characters'),
       description: z.string().trim().max(10000, 'Use at most 10000 characters'),
       deviation_reason_id: z.string(),
       is_planned: z.enum(['planned', 'unplanned']),
@@ -80,6 +102,8 @@ function makeSchema(requireProject: boolean, maxHours: number) {
       if (requireProject && !data.project_id) {
         ctx.addIssue({ code: 'custom', path: ['project_id'], message: 'Choose a project' })
       }
+      const message = data.until && data.log_date ? untilError(data.log_date, data.until) : null
+      if (message) ctx.addIssue({ code: 'custom', path: ['until'], message })
     })
 }
 type LogForm = z.infer<ReturnType<typeof makeSchema>>
@@ -93,8 +117,6 @@ const FIELDS = [
   'project_id',
   'activity_id',
   'om_project_id',
-  'task_id',
-  'title',
   'description',
   'deviation_reason_id',
   'is_planned',
@@ -110,11 +132,13 @@ interface LogFormProps {
   log: ProdLog | null
   /** False when an admin edits someone else's log. */
   isOwn: boolean
-  /** New log only: start from this task, date and (actual) hours. */
+  /** New log only: start on this date. */
   prefill?: LogPrefill
+  /** New log only: start from a copy of this row. */
+  copyFrom?: ProdLog
   /** New log only: start from an AI draft. */
   draft?: LogDraft
-  /** Called after a successful save, before onDone. */
+  /** Called after a successful save (with the first row of a range), before onDone. */
   onSaved?: (log: ProdLog) => void
   /** Called after saving and on cancel. */
   onDone: () => void
@@ -122,7 +146,6 @@ interface LogFormProps {
 
 export interface LogPrefill {
   logDate: string
-  task?: Task
 }
 
 /** Loads the dropdown options first, so every select is ready when the form mounts. */
@@ -141,24 +164,28 @@ export default function LogFormBody(props: LogFormProps) {
   return <LogFormInner {...props} options={options.data} />
 }
 
+const EMPTY = {
+  until: '',
+  om_project_id: '',
+  description: '',
+  deviation_reason_id: '',
+  planned_hours: '',
+  is_planned: 'planned' as const,
+}
+
+/** The id of a value on a row, if it is still active ("" otherwise). */
+function activeId(ref: { id: number; is_active: boolean } | null): string {
+  return ref?.is_active ? String(ref.id) : ''
+}
+
 function defaultValues(
   linked: Linked,
-  log: ProdLog | null,
-  prefill?: LogPrefill,
-  draft?: LogDraft,
+  { log, prefill, draft, copyFrom }: Pick<LogFormProps, 'log' | 'prefill' | 'draft' | 'copyFrom'>,
 ): LogForm {
-  const empty = {
-    om_project_id: '',
-    title: '',
-    description: '',
-    deviation_reason_id: '',
-    planned_hours: '',
-    is_planned: 'planned' as const,
-  }
   if (draft) {
     // The backend only returns active values that fit the linked rules.
     return {
-      ...empty,
+      ...EMPTY,
       log_date: draft.log_date ?? '',
       work_setup_id: asString(draft.work_setup_id) || linked.defaultWorkSetupId,
       planned_hours: asString(draft.planned_hours),
@@ -167,13 +194,12 @@ function defaultValues(
       project_id: asString(draft.project_id),
       activity_id: asString(draft.activity_id),
       om_project_id: asString(draft.om_project_id),
-      task_id: asString(draft.task_id),
-      title: draft.title ?? '',
       description: draft.description ?? '',
     }
   }
   if (log) {
     return {
+      ...EMPTY,
       log_date: log.log_date,
       work_setup_id: String(log.work_setup.id),
       planned_hours: asString(log.planned_hours),
@@ -182,27 +208,52 @@ function defaultValues(
       project_id: asString(log.project?.id),
       activity_id: String(log.activity.id),
       om_project_id: asString(log.om_project?.id),
-      task_id: asString(log.task_id),
-      title: log.title ?? '',
       description: log.description ?? '',
       deviation_reason_id: asString(log.deviation_reason?.id),
       is_planned: log.is_planned ? 'planned' : 'unplanned',
     }
   }
-  const task = prefill?.task
-  // Only active values that fit together can be chosen on a new log.
-  const category = task?.category?.is_active ? String(task.category.id) : ''
-  const taskProject = task?.project?.is_active ? String(task.project.id) : ''
+  if (copyFrom) {
+    // A new row: only active values that still fit together are kept.
+    const category = activeId(copyFrom.category)
+    const projectId = activeId(copyFrom.project)
+    const project = linked.isProjectValid(projectId, category) ? projectId : ''
+    const activity = activeId(copyFrom.activity)
+    return {
+      ...EMPTY,
+      log_date: nextWeekday(copyFrom.log_date),
+      work_setup_id: activeId(copyFrom.work_setup) || linked.defaultWorkSetupId,
+      planned_hours: asString(copyFrom.planned_hours ?? copyFrom.hours_spent),
+      hours_spent: '',
+      category_id: category,
+      project_id: project,
+      activity_id: linked.isActivityValid(activity, project) ? activity : '',
+      om_project_id: linked.offersOmProject(category) ? activeId(copyFrom.om_project) : '',
+      description: copyFrom.description ?? '',
+      is_planned: copyFrom.is_planned ? 'planned' : 'unplanned',
+    }
+  }
   return {
-    ...empty,
+    ...EMPTY,
     log_date: prefill?.logDate ?? todayIso(),
     work_setup_id: linked.defaultWorkSetupId,
     hours_spent: '',
-    category_id: category,
-    project_id: linked.isProjectValid(taskProject, category) ? taskProject : '',
+    category_id: '',
+    project_id: '',
     activity_id: '',
-    task_id: task ? String(task.id) : '',
   }
+}
+
+/** A bulk error keyed by row ("rows.2.hours_spent") as a plain field error. */
+function withoutRowPrefix(error: unknown): unknown {
+  if (!(error instanceof ApiError)) return error
+  const fields = Object.fromEntries(
+    Object.entries(error.fields).map(([key, message]) => [
+      key.replace(/^rows\.\d+\./, ''),
+      message,
+    ]),
+  )
+  return new ApiError(error.status, error.code, error.message, fields)
 }
 
 const MISSING_HINT: ReactNode = (
@@ -212,12 +263,15 @@ const MISSING_HINT: ReactNode = (
   </span>
 )
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 const hasChoice = (choices: Choice[], id: string) => choices.some((c) => String(c.id) === id)
 
 function LogFormInner({
   log,
   isOwn,
   prefill,
+  copyFrom,
   draft,
   onSaved,
   onDone,
@@ -226,8 +280,9 @@ function LogFormInner({
   const toast = useToast()
   const isAdmin = useCurrentUser().data?.role === 'admin'
   const create = useCreateLog()
+  const createMany = useCreateLogs()
   const update = useUpdateLog()
-  const mutation = log ? update : create
+  const isPending = create.isPending || createMany.isPending || update.isPending
   const linked = useMemo(() => buildLinked(options), [options])
   // Old rows (from before projects were required) may stay without a project.
   const requireProject = !log || log.project !== null
@@ -241,7 +296,7 @@ function LogFormInner({
     formState: { errors },
   } = useForm<LogForm>({
     resolver: zodResolver(makeSchema(requireProject, options.workday_hours)),
-    defaultValues: defaultValues(linked, log, prefill, draft),
+    defaultValues: defaultValues(linked, { log, prefill, draft, copyFrom }),
   })
   const values = useWatch({ control })
 
@@ -277,14 +332,6 @@ function LogFormInner({
     if (om && !hasChoice(omChoices(category), om)) setValue('om_project_id', '', opts)
   }
 
-  /** Copy the task's project and category (active ones only: others can't be chosen). */
-  function prefillFrom(task: Task) {
-    const opts = { shouldDirty: true, shouldValidate: Boolean(errors.category_id) }
-    if (task.category?.is_active) setValue('category_id', String(task.category.id), opts)
-    if (task.project?.is_active) setValue('project_id', String(task.project.id), opts)
-    cascade(getValues('category_id'), getValues('project_id'))
-  }
-
   const category = values.category_id ?? ''
   const project = values.project_id ?? ''
   const projects = projectChoices(category)
@@ -294,9 +341,14 @@ function LogFormInner({
   const categories = withCurrent(options.categories, log?.category)
   const reasons = withCurrent(options.deviation_reasons, log?.deviation_reason)
 
-  // ------------------------------------------------------------ planning lock
+  // ------------------------------------------------------------ dates and planning lock
 
   const logDate = values.log_date ?? ''
+  const until = values.until ?? ''
+  const rangeDays =
+    !log && logDate && until && !untilError(logDate, until) ? weekdaysBetween(logDate, until) : []
+  const isRange = rangeDays.length > 1 || (rangeDays.length === 1 && rangeDays[0] !== logDate)
+
   const week = usePlanningStatus(logDate || undefined, /^\d{4}-\d{2}-\d{2}$/.test(logDate))
   const plannedLocked = !isAdmin && week.data !== undefined && !week.data.is_open
   const lockHint = week.data && !week.data.is_open && (
@@ -327,7 +379,7 @@ function LogFormInner({
   // ------------------------------------------------------------ submit
 
   function onSubmit(data: LogForm) {
-    const body = {
+    const body: ProdLogCreate = {
       log_date: data.log_date,
       work_setup_id: Number(data.work_setup_id),
       planned_hours: hoursOrNull(data.planned_hours),
@@ -335,26 +387,47 @@ function LogFormInner({
       category_id: Number(data.category_id),
       activity_id: Number(data.activity_id),
       om_project_id: omProjects.length ? idOrNull(data.om_project_id) : null,
-      title: data.title || null,
       description: data.description || null,
       deviation_reason_id: idOrNull(data.deviation_reason_id),
       is_planned: data.is_planned === 'planned',
+      project_id: idOrNull(data.project_id),
+    }
+    const onError = (error: unknown) => {
+      const plain = withoutRowPrefix(error)
+      if (!applyFieldErrors(plain, setError, FIELDS)) toast.error(errorMessage(plain))
+    }
+    const finish = (saved: ProdLog, message: string) => {
+      onSaved?.(saved)
+      toast.success(message)
+      onDone()
+    }
+
+    if (log) {
       // An old row without a project keeps it empty unless one is chosen.
-      ...(data.project_id || !log ? { project_id: idOrNull(data.project_id) } : {}),
-      ...(isOwn ? { task_id: idOrNull(data.task_id) } : {}),
+      const { project_id, ...rest } = body
+      update.mutate(
+        { id: log.id, ...rest, ...(project_id !== null ? { project_id } : {}) },
+        { onSuccess: (saved) => finish(saved, `Saved “${saved.activity.label}”`), onError },
+      )
+    } else if (isRange) {
+      createMany.mutate(
+        rangeDays.map((day) => ({ ...body, log_date: day })),
+        {
+          onSuccess: (result) => {
+            const first = result.items[0]
+            if (first) {
+              finish(first, `Added “${first.activity.label}” on ${plural(result.created, 'day')}`)
+            }
+          },
+          onError,
+        },
+      )
+    } else {
+      create.mutate(body, {
+        onSuccess: (saved) => finish(saved, `Added “${saved.activity.label}”`),
+        onError,
+      })
     }
-    const options = {
-      onSuccess: (saved: ProdLog) => {
-        onSaved?.(saved)
-        toast.success(log ? `Saved “${saved.activity.label}”` : `Added “${saved.activity.label}”`)
-        onDone()
-      },
-      onError: (error: unknown) => {
-        if (!applyFieldErrors(error, setError, FIELDS)) toast.error(errorMessage(error))
-      },
-    }
-    if (log) update.mutate({ id: log.id, ...body }, options)
-    else create.mutate(body, options)
   }
 
   const categoryField = register('category_id')
@@ -374,14 +447,56 @@ function LogFormInner({
           <span>Drafted by AI. Check every field before saving.</span>
         </div>
       )}
+      {copyFrom && (
+        <p className="mb-2 rounded-box bg-base-200 px-3 py-2 text-sm">
+          A copy of <strong>{copyFrom.activity.label}</strong>. Pick the day (or days with “Until”),
+          check the hours, and add it.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-        <InputField
-          label="Date"
-          type="date"
-          error={errors.log_date?.message}
-          {...missing('log_date', 'input')}
-          {...register('log_date')}
+        <Controller
+          control={control}
+          name="log_date"
+          render={({ field }) => (
+            <DateField
+              label="Date"
+              wrapperClassName={log ? 'md:col-span-2' : undefined}
+              error={errors.log_date?.message}
+              {...missing('log_date', 'input')}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              ref={field.ref}
+            />
+          )}
         />
+        {!log && (
+          <Controller
+            control={control}
+            name="until"
+            render={({ field }) => (
+              <DateField
+                label="Until (optional)"
+                placeholder="Only this day"
+                clearable
+                min={logDate || undefined}
+                error={errors.until?.message}
+                hint={
+                  isRange
+                    ? `Adds this row on ${plural(rangeDays.length, 'weekday')}, ${formatDayRange(
+                        rangeDays[0] ?? logDate,
+                        rangeDays.at(-1) ?? logDate,
+                      )}.`
+                    : 'Add the same row on every weekday up to this date.'
+                }
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                ref={field.ref}
+              />
+            )}
+          />
+        )}
         <ChoiceSelect
           label="Work set-up"
           choices={workSetups}
@@ -390,8 +505,16 @@ function LogFormInner({
           {...missing('work_setup_id', 'select')}
           {...register('work_setup_id')}
         />
+        <SelectField
+          label="Planned / Unplanned"
+          error={errors.is_planned?.message}
+          {...register('is_planned')}
+        >
+          <option value="planned">Planned</option>
+          <option value="unplanned">Unplanned</option>
+        </SelectField>
         <InputField
-          label="Planned hours"
+          label={isRange ? 'Planned hours (per day)' : 'Planned hours'}
           type="number"
           inputMode="decimal"
           step="0.25"
@@ -405,7 +528,7 @@ function LogFormInner({
           {...register('planned_hours')}
         />
         <InputField
-          label="Actual hours"
+          label={isRange ? 'Actual hours (per day)' : 'Actual hours'}
           type="number"
           inputMode="decimal"
           step="0.25"
@@ -415,14 +538,6 @@ function LogFormInner({
           {...missing('hours', 'input')}
           {...register('hours_spent')}
         />
-        <SelectField
-          label="Planned / Unplanned"
-          error={errors.is_planned?.message}
-          {...register('is_planned')}
-        >
-          <option value="planned">Planned</option>
-          <option value="unplanned">Unplanned</option>
-        </SelectField>
         <ChoiceSelect
           label="Category"
           choices={categories}
@@ -473,29 +588,6 @@ function LogFormInner({
           />
         )}
       </div>
-      {isOwn ? (
-        <TaskSelect
-          label="Task (optional)"
-          current={
-            log?.task ?? (prefill?.task ? { id: prefill.task.id, title: prefill.task.title } : null)
-          }
-          error={errors.task_id?.message}
-          {...register('task_id')}
-          onTaskChosen={prefillFrom}
-        />
-      ) : (
-        log?.task_id && (
-          <p className="mt-2 text-sm text-base-content/80">
-            Linked to one of {log.user.username}’s tasks (only they can change the link).
-          </p>
-        )
-      )}
-      <InputField
-        label="Note (optional)"
-        autoComplete="off"
-        error={errors.title?.message}
-        {...register('title')}
-      />
       <ChoiceSelect
         label="Reason for deviation (optional)"
         choices={reasons}
@@ -514,7 +606,9 @@ function LogFormInner({
         <button type="button" className="btn btn-ghost" onClick={onDone}>
           Cancel
         </button>
-        <SubmitButton isPending={mutation.isPending}>{log ? 'Save' : 'Add log'}</SubmitButton>
+        <SubmitButton isPending={isPending}>
+          {log ? 'Save' : isRange ? `Add ${plural(rangeDays.length, 'row')}` : 'Add log'}
+        </SubmitButton>
       </div>
     </form>
   )
@@ -535,56 +629,6 @@ function ChoiceSelect({ choices, emptyLabel, ...props }: ChoiceSelectProps) {
           {choice.note ? `${choice.label} (${choice.note})` : choice.label}
         </option>
       ))}
-    </SelectField>
-  )
-}
-
-type TaskSelectProps = Omit<ComponentProps<typeof SelectField>, 'children'> & {
-  /** The task already linked (it may be completed, so not in the open list). */
-  current: { id: number; title: string } | null
-  onTaskChosen: (task: Task) => void
-}
-
-/** The user's open tasks, plus the currently linked task. */
-function TaskSelect({
-  current,
-  onTaskChosen,
-  onChange,
-  disabled,
-  error,
-  ...props
-}: TaskSelectProps) {
-  const tasks = useTaskOptions()
-  const open = tasks.data ?? []
-  const options = open.map((task) => ({ id: task.id, title: task.title }))
-  if (current && !open.some((task) => task.id === current.id)) options.unshift(current)
-
-  return (
-    <SelectField
-      // Remount once options arrive so React Hook Form re-applies the field value.
-      key={tasks.isPending ? 'loading' : 'ready'}
-      disabled={disabled || tasks.isPending}
-      error={error ?? (tasks.error ? 'Could not load your tasks' : undefined)}
-      hint="Choosing a task fills in its project and category."
-      onChange={(event) => {
-        void onChange?.(event)
-        const task = open.find((t) => t.id === Number(event.target.value))
-        if (task) onTaskChosen(task)
-      }}
-      {...props}
-    >
-      {tasks.isPending ? (
-        <option value="">Loading…</option>
-      ) : (
-        <>
-          <option value="">No task</option>
-          {options.map((task) => (
-            <option key={task.id} value={task.id}>
-              {task.title}
-            </option>
-          ))}
-        </>
-      )}
     </SelectField>
   )
 }

@@ -22,6 +22,7 @@ Use current stable versions of everything. Check the latest version at install t
 - TanStack Query for server state
 - React Hook Form + Zod for forms (`@hookform/resolvers` connects them)
 - Recharts for charts
+- DayPicker (`@daypicker/react`) for date pickers, styled by daisyUI's `react-day-picker` class
 - `openapi-typescript` to generate TS types from the FastAPI OpenAPI schema
 - ESLint + Prettier
 
@@ -179,7 +180,7 @@ Established in Phase 0 and used by every endpoint.
 | `/invite/:token` | public | Accept invite |
 | `/reset-password/:token` | public | Set a new password |
 | `/profile` | all | Change password, theme |
-| `/today` | all | Today's log rows: planned vs actual, fill in actuals, copy a day's plan, AI entry |
+| `/today` | all | Today's log rows: planned vs actual, fill in actuals, copy a row or last week's plan, AI entry |
 | `/tasks` | all | Own tasks |
 | `/logs` | all | Own prod logs (planned and actual) |
 | `/support`, `/support/:id` | all | Shared support dictionary: search, add, edit own |
@@ -379,9 +380,9 @@ tasks
   created_at, updated_at
 
 prod_logs
-  id, user_id, team_id (nullable, snapshot), task_id (nullable),
+  id, user_id, team_id (nullable, snapshot),
   log_date, work_setup_id (required),
-  activity_id (required), title (nullable, short note), description (nullable, "Remarks"),
+  activity_id (required), description (nullable, "Remarks"),
   project_id (nullable in DB, required by the service for new rows), category_id (required),
   om_project_id (nullable FK om_projects),
   is_planned (bool)              # Planned vs Unplanned; chosen by the user, default Planned
@@ -409,7 +410,7 @@ ai_requests
 ### Rules
 - **Defaults:** exactly one active `statuses` row and one active `priorities` row have `is_default = true` (enforce with a partial unique index and in the service). New tasks without an explicit status/priority get the default. Code never looks up a status or priority by label.
 - **Done:** a task is completed when its status has `is_done = true`; set `completed_at` then, clear it when moved back.
-- **Prod logs hold no status or priority.** Those belong to tasks. A log stores its own `project_id` and `category_id`; when a task is selected they are pre-filled from the task and remain editable. The values on the log are what dashboards report.
+- **Prod logs and tasks are separate.** Tasks are their own module; a log has no task link, status or priority. A log stores its own `project_id` and `category_id`; the values on the log are what dashboards report. A log has no short note: free text goes in Remarks (`description`).
 - **Linked dropdowns:** a log's project must be linked to its category (`project_categories`); its activity must be in the project's activity group; `om_project_id` is allowed only when the category has `requires_om_project` (optional even then). Inactive values follow the usual rule (kept on existing rows, not newly chosen).
 - **Planning deadline:** the plan for a week (Monday to Friday) is due at `PLAN_DEADLINE_TIME` (default 18:30) on the Friday before, in `APP_TIMEZONE`. A week is *open* before its deadline and *locked* after it.
 - **Planned and actual:** `is_planned` (Planned/Unplanned) is chosen by the user on the row, default Planned, and can be changed at any time. `planned_hours` can be set, changed or cleared, and rows holding planned hours deleted, only while the week is open (admin excepted). Actual `hours_spent`, Planned/Unplanned, the deviation reason and remarks can be edited at any time. Dashboards report **actual** hours (`hours_spent`); rows without actual hours are excluded. The deviation reason is an optional dropdown (blank by default), hinted when actual differs from planned.
@@ -419,7 +420,8 @@ ai_requests
 - **Team snapshot:** `prod_logs.team_id` is set from the author's `team_id` at creation and never changes afterwards. Manager access and team dashboards filter on this column.
 - **Daily hours:** the service rejects a log if the user's total `hours_spent` for that `log_date` would exceed `WORKDAY_HOURS`, and separately if the total `planned_hours` would exceed it (so one row can't exceed it either). The database still checks 0 < hours <= 24 per row.
 - **Audit:** `prod_logs.updated_by` is set on every create and update. The UI shows "edited by {admin}" when `updated_by != user_id`.
-- **Copy a plan:** a user can copy their rows from one day (or one week) to days in an open week as planned rows (planned hours = source planned, else actual; actual empty), skipping days that would exceed the planned daily cap (`WORKDAY_HOURS`) and inactive values.
+- **Copy:** a single row is copied with its "Copy" button, which opens the log form prefilled from it (planned hours = source planned, else actual; actual empty; remarks kept; next weekday) for the user to pick the day or days. A user can also copy their rows from last week (or any week) to days in an open week as planned rows by weekday (same hours rule, remarks kept, not the deviation reason), skipping days that would exceed the planned daily cap (`WORKDAY_HOURS`) and inactive values.
+- **Date range:** a new row can cover a range ("Until" in the form): the same row is created on every weekday (Monday to Friday) in the range through `POST /api/logs/bulk` (all or nothing, max 31 rows; the daily caps count earlier rows of the request; errors name the day and are keyed `rows.N.field`).
 - **Export:** CSV with the sheet's columns in order: Date (`d-Mon-YYYY`), Work Set-Up, Planned Hours, Actual Hours Consumed, Planned (`Planned`/`Unplanned`), Category, Project, Activity/Task, Project (For O&M), Reason for Deviation, Remarks, Date Created. Hours with 2 decimals. One person per file, sorted by date then creation.
 - **Data tab import:** the admin uploads the sheet's Data tab CSV. Columns named after a category list that category's projects; `<Category>_<Project>` columns are an activity group for that project; `Project_Activity` is the group for projects under the enhancement categories; `OM_Reflected_Activity` / `OM_Not_Reflected_Activity` map to the two maintenance projects; `Operations & Maintenance_Project` fills `om_projects`. Import is idempotent (matches by label, case-insensitive), never deletes, and reports what it created and linked. The exact mapping is confirmed in the phase that builds it.
 - **Support dictionary:** shared by everyone. Search matches concern, cause, resolution, notes, project, module and sub-module (case-insensitive). The author or an admin edits or deactivates an entry; deactivated entries are hidden by default and shown with a filter. The admin can import entries from the team's CSV (columns: author, Type, Project, Module, Sub-module, Concern, Cause, Resolution, Query, Notes, Date Inputted).
@@ -427,7 +429,7 @@ ai_requests
 ### Delete behaviour
 | When this is deleted | Then |
 |---|---|
-| Task | `prod_logs.task_id` SET NULL |
+| Task | Deleted (no other table references tasks) |
 | Support entry | Never deleted; deactivate |
 | Team | Allowed only if no users and no prod logs reference it (RESTRICT) |
 | User | Never deleted; deactivate |
@@ -468,10 +470,10 @@ class LLMProvider(Protocol):
 - Every call writes an `ai_requests` row (including failures).
 - Per-user daily limit: `AI_DAILY_LIMIT_PER_USER`. Exceeding it returns HTTP 429.
 - Apply RBAC scoping before building any prompt.
-- User-written text (log titles, descriptions) is data, not instructions. Put it in clearly delimited sections of the prompt and tell the model to ignore instructions inside it.
+- User-written text (log remarks) is data, not instructions. Put it in clearly delimited sections of the prompt and tell the model to ignore instructions inside it.
 
 ### Features
-1. **Natural-language log entry and planning** — input: free text, which may describe one row or many (e.g. "workforce API Tuesday to Friday, 4 hours a day" = four planned rows; "this week, 4 hrs a day" = Monday to Friday; hours are per day unless the text clearly says per week). Context: today's date with weekday, active categories, projects (with their category links and activity group), activities by group, O&M projects and work set-ups (id + label), user's open tasks (id + title). Output: a list of draft rows (log_date, planned_hours, hours_spent, work_setup_id, activity_id, category_id, project_id, om_project_id, task_id, title, description, missing_fields[]), capped at a sensible maximum. Backend nulls any ID that is invalid, inactive, or not owned by the user, and nulls hours out of range. Frontend shows the rows for review and editing; user confirms to save them all through a bulk create endpoint (all or nothing).
+1. **Natural-language log entry and planning** — input: free text, which may describe one row or many (e.g. "workforce API Tuesday to Friday, 4 hours a day" = four planned rows; "this week, 4 hrs a day" = Monday to Friday; hours are per day unless the text clearly says per week). Context: today's date with weekday, active categories, projects (with their category links and activity group), activities by group, O&M projects and work set-ups (id + label). Tasks are not sent (logs are not linked to tasks). Output: a list of draft rows (log_date, planned_hours, hours_spent, work_setup_id, activity_id, category_id, project_id, om_project_id, description, missing_fields[]), capped at a sensible maximum. Backend nulls any ID that is invalid, inactive or unlinked, and nulls hours out of range. Frontend shows the rows for review and editing; user confirms to save them all through a bulk create endpoint (all or nothing).
 2. **AI team summary** — manager (own team) or admin (any team) selects a date range. Backend computes all numbers in SQL and passes them in; the LLM writes narrative only and must not invent numbers. Truncate log text to `AI_SUMMARY_CHAR_BUDGET`. Store in `ai_summaries`; reuse for the same team + period unless regeneration is requested.
 
 ---

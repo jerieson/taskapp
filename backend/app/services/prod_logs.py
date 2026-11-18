@@ -11,8 +11,6 @@ Access (see the permission matrix in CLAUDE.md):
 Rules enforced here:
 - `team_id` is copied from the author's team on create and never changes.
 - `updated_by` is the caller on every create and update.
-- A linked task must belong to the log's author. Its project/category are copied onto a
-  new log when those are omitted.
 - New rows need a category, project, activity and work set-up (the default one when
   omitted), and planned hours, actual hours or both.
 - Linked dropdowns: the project must be linked to the category, the activity must be in
@@ -52,7 +50,6 @@ from app.models import (
     ProdLog,
     Project,
     Role,
-    Task,
     Team,
     User,
     WorkSetup,
@@ -62,12 +59,13 @@ from app.schemas.prod_logs import (
     CopyLogs,
     CopyResult,
     PlainRef,
+    ProdLogBulkCreate,
+    ProdLogBulkResult,
     ProdLogCreate,
     ProdLogListItem,
     ProdLogOut,
     ProdLogQuery,
     ProdLogUpdate,
-    TaskRef,
     TeamLogQuery,
     TeamMemberOut,
     UserRef,
@@ -90,10 +88,8 @@ _LogRow = tuple[
     Activity,
     OmProject | None,
     DeviationReason | None,
-    int | None,
-    str | None,
 ]
-_ROW_LEN = 11
+_ROW_LEN = 9
 
 
 def _base_query() -> Select[_LogRow]:
@@ -108,8 +104,6 @@ def _base_query() -> Select[_LogRow]:
             Activity,
             OmProject,
             DeviationReason,
-            Task.id,
-            Task.title,
         )
         .join(Category, Category.id == ProdLog.category_id)
         .outerjoin(Project, Project.id == ProdLog.project_id)
@@ -119,11 +113,10 @@ def _base_query() -> Select[_LogRow]:
         .join(Activity, Activity.id == ProdLog.activity_id)
         .outerjoin(OmProject, OmProject.id == ProdLog.om_project_id)
         .outerjoin(DeviationReason, DeviationReason.id == ProdLog.deviation_reason_id)
-        .outerjoin(Task, Task.id == ProdLog.task_id)
     )
 
 
-def _fields(row: Row[Any], viewer: User) -> dict[str, Any]:
+def _fields(row: Row[Any]) -> dict[str, Any]:
     (
         log,
         category,
@@ -134,10 +127,7 @@ def _fields(row: Row[Any], viewer: User) -> dict[str, Any]:
         activity,
         om_project,
         deviation_reason,
-        task_id,
-        task_title,
     ) = row[:_ROW_LEN]
-    show_task = task_id is not None and log.user_id == viewer.id
     return {
         "id": log.id,
         "user": UserRef.model_validate(author),
@@ -151,9 +141,6 @@ def _fields(row: Row[Any], viewer: User) -> dict[str, Any]:
         "project": ProjectRef.model_validate(project) if project else None,
         "activity": LookupRef.model_validate(activity),
         "om_project": PlainRef.model_validate(om_project) if om_project else None,
-        "task_id": log.task_id,
-        "task": TaskRef(id=task_id, title=task_title) if show_task else None,
-        "title": log.title,
         "description": log.description,
         "deviation_reason": PlainRef.model_validate(deviation_reason) if deviation_reason else None,
         "updated_by": UserRef.model_validate(editor),
@@ -180,7 +167,7 @@ async def _load(db: AsyncSession, user: User, log_id: int) -> ProdLogOut:
     ).one_or_none()
     if row is None or not _can_read(user, row[0]):
         raise _not_found()
-    return ProdLogOut.model_validate(_fields(row, user))
+    return ProdLogOut.model_validate(_fields(row))
 
 
 async def _get_writable(db: AsyncSession, user: User, log_id: int) -> ProdLog:
@@ -191,13 +178,6 @@ async def _get_writable(db: AsyncSession, user: User, log_id: int) -> ProdLog:
     if log.user_id != user.id and user.role != Role.ADMIN:
         raise AppError(403, "forbidden", "You can view this log but not change it")
     return log
-
-
-async def _check_task(db: AsyncSession, task_id: int, author_id: int) -> Task:
-    task = await db.get(Task, task_id)
-    if task is None or task.user_id != author_id:
-        raise invalid_reference("task_id", "Choose one of the author's own tasks")
-    return task
 
 
 async def _default_work_setup(db: AsyncSession) -> int:
@@ -313,17 +293,6 @@ async def _check_daily_total(
         raise AppError(422, "daily_hours_exceeded", message, fields={column.key: message})
 
 
-async def _active_or_none(db: AsyncSession, field: str, value: int | None) -> int | None:
-    """`value` if it is set and active, else None (used when copying from a task)."""
-    if value is None:
-        return None
-    try:
-        await check_ref(db, field, value, keep=None)
-    except AppError:
-        return None
-    return value
-
-
 # ---------------------------------------------------------------- lists
 
 
@@ -343,7 +312,7 @@ async def _page(
     items = [
         ProdLogListItem.model_validate(
             {
-                **_fields(row, viewer),
+                **_fields(row),
                 "day_total_hours": row[_ROW_LEN],
                 "day_planned_hours": row[_ROW_LEN + 1],
             }
@@ -370,8 +339,6 @@ def _filter(stmt: Select[_LogRow], params: ProdLogQuery | TeamLogQuery) -> Selec
 async def list_logs(db: AsyncSession, user: User, params: ProdLogQuery) -> Page[ProdLogListItem]:
     """The caller's own logs (for admins too: other people's logs are under /teams)."""
     stmt = _filter(_base_query().where(ProdLog.user_id == user.id), params)
-    if params.task_id is not None:
-        stmt = stmt.where(ProdLog.task_id == params.task_id)
     return await _page(db, stmt, params, user)
 
 
@@ -427,29 +394,21 @@ async def get_log(db: AsyncSession, user: User, log_id: int) -> ProdLogOut:
     return await _load(db, user, log_id)
 
 
-async def create_log(
+async def _new_log(
     db: AsyncSession, user: User, data: ProdLogCreate, settings: Settings
-) -> ProdLogOut:
-    sent = data.model_fields_set
-    is_admin = user.role == Role.ADMIN
+) -> ProdLog:
+    """Validate one new row (everything but the daily caps) and build it, unsaved."""
     week = plan_week(data.log_date, settings)
-    if data.planned_hours is not None and not week.is_open and not is_admin:
+    if data.planned_hours is not None and not week.is_open and user.role != Role.ADMIN:
         raise _week_locked(week, "planned_hours", "log the actual hours as unplanned work")
-    project_id, category_id = data.project_id, data.category_id
-    if data.task_id is not None:
-        task = await _check_task(db, data.task_id, user.id)
-        if "project_id" not in sent:
-            project_id = await _active_or_none(db, "project_id", task.project_id)
-        if category_id is None:
-            category_id = await _active_or_none(db, "category_id", task.category_id)
-    if category_id is None:
+    if data.category_id is None:
         raise invalid_reference("category_id", "Choose a category")
-    if project_id is None:
+    if data.project_id is None:
         raise invalid_reference("project_id", "Choose a project")
     work_setup_id = data.work_setup_id or await _default_work_setup(db)
     refs = {
-        "category_id": category_id,
-        "project_id": project_id,
+        "category_id": data.category_id,
+        "project_id": data.project_id,
         "activity_id": data.activity_id,
         "work_setup_id": work_setup_id,
         "om_project_id": data.om_project_id,
@@ -458,35 +417,78 @@ async def create_log(
     for field, value in refs.items():
         if value is not None:
             await check_ref(db, field, value, keep=None)
-    await _check_links(db, _Links(category_id, project_id, data.activity_id, data.om_project_id))
+    await _check_links(
+        db, _Links(data.category_id, data.project_id, data.activity_id, data.om_project_id)
+    )
     if data.planned_hours is None and data.hours_spent is None:
         raise _hours_required()
-
-    log = ProdLog(
+    return ProdLog(
         user_id=user.id,
         team_id=user.team_id,
-        task_id=data.task_id,
         log_date=data.log_date,
         work_setup_id=work_setup_id,
         activity_id=data.activity_id,
-        project_id=project_id,
-        category_id=category_id,
+        project_id=data.project_id,
+        category_id=data.category_id,
         om_project_id=data.om_project_id,
         is_planned=data.is_planned,
         planned_hours=data.planned_hours,
         hours_spent=data.hours_spent,
-        title=data.title or None,
         description=data.description or None,
         deviation_reason_id=data.deviation_reason_id,
         updated_by=user.id,
     )
+
+
+async def _check_caps(db: AsyncSession, log: ProdLog, settings: Settings) -> None:
     cap = settings.workday_hours
-    await _check_daily_total(db, log, ProdLog.hours_spent, data.hours_spent, None, cap)
-    await _check_daily_total(db, log, ProdLog.planned_hours, data.planned_hours, None, cap)
+    await _check_daily_total(db, log, ProdLog.hours_spent, log.hours_spent, None, cap)
+    await _check_daily_total(db, log, ProdLog.planned_hours, log.planned_hours, None, cap)
+
+
+async def create_log(
+    db: AsyncSession, user: User, data: ProdLogCreate, settings: Settings
+) -> ProdLogOut:
+    log = await _new_log(db, user, data, settings)
+    await _check_caps(db, log, settings)
     db.add(log)
     await db.commit()
     logger.info("prod_log_created", extra={"fields": {"log_id": log.id}})
     return await _load(db, user, log.id)
+
+
+def _row_error(error: AppError, index: int, day: date) -> AppError:
+    """The same error, with its fields keyed by row (`rows.2.hours_spent`) and the
+    row's date in front of the message so the user knows which day failed."""
+    prefix = f"{day:%a %d %b}: "
+    fields = (
+        {f"rows.{index}.{name}": prefix + message for name, message in error.fields.items()}
+        if error.fields
+        else None
+    )
+    return AppError(error.status_code, error.code, prefix + error.message, fields=fields)
+
+
+async def create_logs(
+    db: AsyncSession, user: User, data: ProdLogBulkCreate, settings: Settings
+) -> ProdLogBulkResult:
+    """Create every row or none. The daily caps include the rows before each one."""
+    logs: list[ProdLog] = []
+    # A savepoint, so a failing row also undoes the rows already flushed.
+    async with db.begin_nested():
+        for index, row in enumerate(data.rows):
+            try:
+                log = await _new_log(db, user, row, settings)
+                await _check_caps(db, log, settings)
+            except AppError as error:
+                raise _row_error(error, index, row.log_date) from error
+            db.add(log)
+            await db.flush()
+            logs.append(log)
+    await db.commit()
+    logger.info("prod_logs_created", extra={"fields": {"created": len(logs)}})
+    items = [await _load(db, user, log.id) for log in logs]
+    return ProdLogBulkResult(created=len(items), items=items)
 
 
 _REF_FIELDS = (
@@ -497,7 +499,7 @@ _REF_FIELDS = (
     "om_project_id",
     "deviation_reason_id",
 )
-_TEXT_FIELDS = ("title", "description")
+_TEXT_FIELDS = ("description",)
 
 
 def _check_planned_lock(log: ProdLog, data: ProdLogUpdate, settings: Settings) -> None:
@@ -532,8 +534,6 @@ async def update_log(
         value = getattr(data, field)
         if field in sent and value is not None:
             await check_ref(db, field, value, keep=getattr(log, field))
-    if "task_id" in sent and data.task_id is not None and data.task_id != log.task_id:
-        await _check_task(db, data.task_id, log.user_id)
     new_links = _Links(
         final("category_id"), final("project_id"), final("activity_id"), final("om_project_id")
     )
@@ -545,7 +545,6 @@ async def update_log(
         "log_date",
         "planned_hours",
         "hours_spent",
-        "task_id",
         "is_planned",
         *_REF_FIELDS,
     ):
@@ -579,7 +578,7 @@ async def delete_log(db: AsyncSession, user: User, log_id: int, settings: Settin
     logger.info("prod_log_deleted", extra={"fields": {"log_id": log_id}})
 
 
-# ---------------------------------------------------------------- copy a plan
+# ---------------------------------------------------------------- copy a week
 
 
 async def _copyable(db: AsyncSession, log: ProdLog) -> bool:
@@ -604,7 +603,7 @@ async def _copyable(db: AsyncSession, log: ProdLog) -> bool:
 
 
 async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Settings) -> CopyResult:
-    """Copy the caller's rows from a day or a week to days in open weeks, as planned rows.
+    """Copy the caller's rows from a week to days in open weeks, as planned rows.
 
     A target day whose planned total would pass WORKDAY_HOURS is skipped as a whole. Rows
     with an inactive or unlinked value are left out. All in one transaction.
@@ -614,12 +613,8 @@ async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Sett
         if not week.is_open:
             raise _week_locked(week, "to_dates", "copy into a week that is still open")
 
-    source_day = data.from_date or data.from_week or date.min  # the schema requires one
-    if data.from_date is not None:
-        start = end = source_day
-    else:
-        start = monday_of(source_day)
-        end = start + timedelta(days=6)
+    start = monday_of(data.from_week)
+    end = start + timedelta(days=6)
     sources = (
         await db.scalars(
             select(ProdLog)
@@ -628,7 +623,7 @@ async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Sett
         )
     ).all()
     if not sources:
-        message = "There are no rows to copy on the chosen day or week"
+        message = "There are no rows to copy in the chosen week"
         raise AppError(422, "nothing_to_copy", message)
 
     usable = [log for log in sources if await _copyable(db, log)]
@@ -652,7 +647,7 @@ async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Sett
 
     days: list[CopyDayResult] = []
     for target in sorted(data.to_dates):
-        rows = usable if data.from_date is not None else by_weekday.get(target.weekday(), [])
+        rows = by_weekday.get(target.weekday(), [])
         hours = [log.planned_hours or log.hours_spent or Decimal(0) for log in rows]
         if not rows:
             days.append(CopyDayResult(date=target, created=0, skipped_reason="nothing_to_copy"))
@@ -676,7 +671,6 @@ def _copy_of(log: ProdLog, user: User, target: date, planned: Decimal) -> ProdLo
     return ProdLog(
         user_id=user.id,
         team_id=user.team_id,
-        task_id=log.task_id,
         log_date=target,
         work_setup_id=log.work_setup_id,
         activity_id=log.activity_id,
@@ -686,6 +680,6 @@ def _copy_of(log: ProdLog, user: User, target: date, planned: Decimal) -> ProdLo
         is_planned=True,
         planned_hours=planned,
         hours_spent=None,
-        title=log.title,
+        description=log.description,
         updated_by=user.id,
     )

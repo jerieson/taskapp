@@ -10,6 +10,7 @@ export type ProdLog = Schemas['ProdLogOut']
 export type ProdLogItem = Schemas['ProdLogListItem']
 export type ProdLogCreate = Schemas['ProdLogCreate']
 export type ProdLogUpdate = Schemas['ProdLogUpdate']
+export type ProdLogBulkResult = Schemas['ProdLogBulkResult']
 export type TeamMember = Schemas['TeamMemberOut']
 
 interface CommonFilters {
@@ -20,9 +21,7 @@ interface CommonFilters {
   activity_id?: number
 }
 
-export interface LogFilters extends CommonFilters {
-  task_id?: number
-}
+export type LogFilters = CommonFilters
 
 export interface TeamLogFilters extends CommonFilters {
   user_id?: number
@@ -107,6 +106,15 @@ export function useCreateLog() {
   })
 }
 
+/** Several rows at once (a date range): all are created or none. */
+export function useCreateLogs() {
+  const invalidate = useInvalidateLogs()
+  return useMutation({
+    mutationFn: (rows: ProdLogCreate[]) => api.post<ProdLogBulkResult>('/logs/bulk', { rows }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useUpdateLog() {
   const invalidate = useInvalidateLogs()
   return useMutation({
@@ -119,7 +127,7 @@ export function useUpdateLog() {
 export type CopyLogs = Schemas['CopyLogs']
 export type CopyResult = Schemas['CopyResult']
 
-/** Copy a day's or a week's rows into days of an open week, as planned rows. */
+/** Copy a week's rows into days of an open week (by weekday), as planned rows. */
 export function useCopyLogs() {
   const invalidate = useInvalidateLogs()
   return useMutation({

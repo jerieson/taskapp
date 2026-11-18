@@ -229,7 +229,7 @@ async def test_no_task_contents_in_team_responses(client: AsyncClient, db: Async
     assert team_id is not None
     ann = await make_user(db, team_id=team_id)
     done = await make_status(db, is_done=True)
-    task = await make_task(
+    await make_task(
         db,
         user=ann,
         title="SECRET-TASK-TITLE",
@@ -237,7 +237,7 @@ async def test_no_task_contents_in_team_responses(client: AsyncClient, db: Async
         status_id=done.id,
         completed_at=datetime(2026, 3, 10, 12, tzinfo=UTC),
     )
-    await _log(db, ann, MONDAY, "2", task=task)
+    await _log(db, ann, MONDAY, "2")
 
     for path, params in ENDPOINTS:
         resp = await client.get(f"/api/teams/{team_id}/dashboard/{path}", params=params)

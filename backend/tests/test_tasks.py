@@ -11,7 +11,6 @@ from app.models import (
     Priority,
     Process,
     ProcessRun,
-    ProdLog,
     Role,
     Status,
     Task,
@@ -19,7 +18,6 @@ from app.models import (
 from tests.auth_helpers import login_as
 from tests.factories import (
     make_category,
-    make_log,
     make_priority,
     make_project,
     make_status,
@@ -280,17 +278,13 @@ async def test_update_rejects_null_required(
 # ---------------------------------------------------------------- delete
 
 
-async def test_delete_keeps_logs(client: AsyncClient, db: AsyncSession) -> None:
+async def test_delete(client: AsyncClient, db: AsyncSession) -> None:
     user = await login_as(client, db)
     task = await make_task(db, user=user)
-    log = await make_log(db, user=user, task=task)
 
     assert (await client.delete(f"/api/tasks/{task.id}")).status_code == 204
     db.expunge_all()
     assert await db.get(Task, task.id) is None
-    kept = await db.get(ProdLog, log.id)
-    assert kept is not None
-    assert kept.task_id is None
 
 
 # ---------------------------------------------------------------- list

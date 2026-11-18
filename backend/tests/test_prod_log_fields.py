@@ -7,10 +7,10 @@ from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient, Response
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import WorkSetup
+from app.models import ProdLog, WorkSetup
 from tests.auth_helpers import login_as
 from tests.factories import (
     LinkedRefs,
@@ -76,7 +76,6 @@ async def test_create_with_all_fields(client: AsyncClient, db: AsyncSession) -> 
             planned_hours="3.5",
             hours_spent=4,
             om_project_id=om.id,
-            title="UAT round 2",
             description="With the client",
             deviation_reason_id=reason.id,
         ),
@@ -88,9 +87,7 @@ async def test_create_with_all_fields(client: AsyncClient, db: AsyncSession) -> 
     assert body["deviation_reason"] == {"id": reason.id, "label": reason.label, "is_active": True}
 
 
-async def test_minimal_row_gets_default_work_setup_and_no_title(
-    client: AsyncClient, db: AsyncSession
-) -> None:
+async def test_minimal_row_gets_default_work_setup(client: AsyncClient, db: AsyncSession) -> None:
     await login_as(client, db)
     refs = await make_linked(db)
     default = await db.scalar(select(WorkSetup).where(WorkSetup.is_default))
@@ -98,7 +95,7 @@ async def test_minimal_row_gets_default_work_setup_and_no_title(
     body = await _create(client, _body(refs))
     assert body["work_setup"]["id"] == default.id  # type: ignore[index]
     # Planned (the week is open) even without planned hours.
-    assert (body["title"], body["planned_hours"], body["is_planned"]) == (None, None, True)
+    assert (body["description"], body["planned_hours"], body["is_planned"]) == (None, None, True)
     assert body["om_project"] is None
 
 
@@ -258,7 +255,9 @@ async def test_update_keeps_unchanged_pairs_after_links_change(
         project_id=(await make_project(db)).id,
         om_project_id=om.id,
     )
-    resp = await client.patch(f"/api/logs/{log.id}", json={"hours_spent": 3, "title": "Still fine"})
+    resp = await client.patch(
+        f"/api/logs/{log.id}", json={"hours_spent": 3, "description": "Still fine"}
+    )
     assert resp.status_code == 200, resp.text
     # Sending the same values back counts as unchanged.
     resp = await client.patch(
@@ -339,3 +338,62 @@ async def test_list_fields_filters_and_day_totals(client: AsyncClient, db: Async
 
     resp = await client.get("/api/logs", params={"activity_id": activity.id})
     assert [i["id"] for i in resp.json()["items"]] == [c.id]
+
+
+# ---------------------------------------------------------------- bulk create
+
+
+async def _count(db: AsyncSession) -> int:
+    return await db.scalar(select(func.count()).select_from(ProdLog)) or 0
+
+
+async def test_bulk_creates_every_row(client: AsyncClient, db: AsyncSession) -> None:
+    await login_as(client, db)
+    refs = await make_linked(db)
+    days = [TODAY + timedelta(days=i) for i in range(3)]
+    rows = [_body(refs, log_date=d.isoformat(), planned_hours=2, hours_spent=None) for d in days]
+    resp = await client.post("/api/logs/bulk", json={"rows": rows})
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["created"] == 3
+    assert [item["log_date"] for item in body["items"]] == [d.isoformat() for d in days]
+    assert {item["planned_hours"] for item in body["items"]} == {2}
+
+
+async def test_bulk_is_all_or_nothing(client: AsyncClient, db: AsyncSession) -> None:
+    await login_as(client, db)
+    refs = await make_linked(db)
+    before = await _count(db)
+    tomorrow = TODAY + timedelta(days=1)
+
+    # The daily cap counts the earlier rows of the same request.
+    rows = [_body(refs, hours_spent=5), _body(refs, hours_spent=5)]
+    resp = await client.post("/api/logs/bulk", json={"rows": rows})
+    assert resp.status_code == 422, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == "daily_hours_exceeded"
+    assert list(error["fields"]) == ["rows.1.hours_spent"]
+    assert error["message"].startswith(f"{TODAY:%a %d %b}: ")
+    assert await _count(db) == before
+
+    # A bad value on a later row undoes the rows before it.
+    inactive = await make_category(db, is_active=False)
+    rows = [
+        _body(refs, log_date=tomorrow.isoformat()),
+        _body(refs, category_id=inactive.id),
+    ]
+    resp = await client.post("/api/logs/bulk", json={"rows": rows})
+    assert resp.status_code == 422, resp.text
+    assert "rows.1.category_id" in resp.json()["error"]["fields"]
+    assert await _count(db) == before
+
+
+async def test_bulk_validation(client: AsyncClient, db: AsyncSession) -> None:
+    await login_as(client, db)
+    refs = await make_linked(db)
+    assert (await client.post("/api/logs/bulk", json={"rows": []})).status_code == 422
+    too_many = [_body(refs, hours_spent=0.25)] * 32
+    assert (await client.post("/api/logs/bulk", json={"rows": too_many})).status_code == 422
+    resp = await client.post("/api/logs/bulk", json={"rows": [_body(refs, hours_spent=None)]})
+    assert resp.status_code == 422
+    assert "rows.0.hours_spent" in resp.json()["error"]["fields"]

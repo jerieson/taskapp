@@ -6,13 +6,14 @@
  * this task (LookupSelect `current`) but cannot be chosen for another.
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 import { errorMessage } from '../../api/client'
 import { useLookups } from '../../api/lookups'
 import { useCreateTask, useUpdateTask, type Task } from '../../api/tasks'
 import AsyncState from '../../components/AsyncState'
+import { DateField } from '../../components/DateInput'
 import { InputField, SubmitButton, TextareaField } from '../../components/FormField'
 import LookupSelect from '../../components/LookupSelect'
 import { SkeletonForm } from '../../components/Skeleton'
@@ -92,6 +93,7 @@ function TaskFormFields({
     register,
     handleSubmit,
     setError,
+    control,
     formState: { errors },
   } = useForm<TaskForm>({
     resolver: zodResolver(taskSchema),
@@ -175,11 +177,21 @@ function TaskFormFields({
           error={errors.category_id?.message}
           {...register('category_id')}
         />
-        <InputField
-          label="Due date (optional)"
-          type="date"
-          error={errors.due_date?.message}
-          {...register('due_date')}
+        <Controller
+          control={control}
+          name="due_date"
+          render={({ field }) => (
+            <DateField
+              label="Due date (optional)"
+              placeholder="No due date"
+              clearable
+              error={errors.due_date?.message}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              ref={field.ref}
+            />
+          )}
         />
       </div>
       <div className="modal-action">

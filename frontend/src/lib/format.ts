@@ -29,9 +29,7 @@ export function formatHours(hours: number): string {
 
 /** Today's calendar date in the browser's time zone, as "YYYY-MM-DD". */
 export function todayIso(): string {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  return toIsoDay(new Date())
 }
 
 const dayWithWeekdayFormat = new Intl.DateTimeFormat(undefined, {
@@ -54,9 +52,38 @@ export function shiftDay(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
-function parseDay(isoDate: string): Date {
+/** "YYYY-MM-DD" as a local Date at midnight (no time zone shift). */
+export function parseDay(isoDate: string): Date {
   const [year = 0, month = 1, day = 1] = isoDate.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+/** A local Date as "YYYY-MM-DD". */
+export function toIsoDay(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** True for Saturday and Sunday. */
+export function isWeekend(isoDate: string): boolean {
+  const weekday = parseDay(isoDate).getDay()
+  return weekday === 0 || weekday === 6
+}
+
+/** Monday to Friday dates from `from` to `to` (inclusive), in order. */
+export function weekdaysBetween(from: string, to: string): string[] {
+  const days: string[] = []
+  for (let day = from; day <= to; day = shiftDay(day, 1)) {
+    if (!isWeekend(day)) days.push(day)
+  }
+  return days
+}
+
+/** The next Monday-to-Friday date after `isoDate`. */
+export function nextWeekday(isoDate: string): string {
+  let day = shiftDay(isoDate, 1)
+  while (isWeekend(day)) day = shiftDay(day, 1)
+  return day
 }
 
 /** The Monday of the week containing `isoDate` (weeks start on Monday). */

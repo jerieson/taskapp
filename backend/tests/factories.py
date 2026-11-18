@@ -133,9 +133,7 @@ async def make_task(session: AsyncSession, *, user: User | None = None, **kw: An
     return await _save(session, Task(**{**fields, **kw}))
 
 
-async def make_log(
-    session: AsyncSession, *, user: User | None = None, task: Task | None = None, **kw: Any
-) -> ProdLog:
+async def make_log(session: AsyncSession, *, user: User | None = None, **kw: Any) -> ProdLog:
     """team_id is snapshotted from the author and updated_by defaults to the author.
 
     Defaults: actual hours 1 (no planned hours), a new activity, the seeded default
@@ -146,9 +144,8 @@ async def make_log(
         "user_id": user.id,
         "team_id": user.team_id,
         "updated_by": user.id,
-        "task_id": task.id if task else None,
         "log_date": date.today(),
-        "title": f"Log {_n()}",
+        "description": f"Log {_n()}",
         "hours_spent": Decimal("1.00"),
     }
     if "work_setup_id" not in kw:
@@ -158,8 +155,7 @@ async def make_log(
     if "activity_id" not in kw:
         fields["activity_id"] = (await make_activity(session)).id
     if "category_id" not in kw:
-        from_task = task.category_id if task else None
-        fields["category_id"] = from_task or (await make_category(session)).id
+        fields["category_id"] = (await make_category(session)).id
     return await _save(session, ProdLog(**{**fields, **kw}))
 
 

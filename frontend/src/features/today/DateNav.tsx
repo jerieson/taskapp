@@ -1,3 +1,4 @@
+import { DateInput } from '../../components/DateInput'
 import { ChevronLeftIcon, ChevronRightIcon } from '../../components/icons'
 import { shiftDay, todayIso } from '../../lib/format'
 
@@ -20,14 +21,12 @@ export default function DateNav({ value, onChange }: DateNavProps) {
         >
           <ChevronLeftIcon />
         </button>
-        <input
-          type="date"
-          className="input join-item w-40"
-          aria-label="Plan date"
+        <DateInput
+          className="join-item w-48"
+          aria-label="Day"
           value={value}
-          required
-          onChange={(event) => {
-            if (event.target.value) onChange(event.target.value)
+          onChange={(day) => {
+            if (day) onChange(day)
           }}
         />
         <button

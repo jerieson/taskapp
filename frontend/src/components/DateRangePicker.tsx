@@ -1,5 +1,6 @@
 import { RANGE_PRESETS, type DateRangeState, type RangePreset } from '../lib/dateRange'
 import { formatDayRange } from '../lib/format'
+import { DateInput } from './DateInput'
 
 /** A preset select, plus start and end dates for a custom range. Use with `useDateRangeParam`. */
 export default function DateRangePicker({ state }: { state: DateRangeState }) {
@@ -21,33 +22,35 @@ export default function DateRangePicker({ state }: { state: DateRangeState }) {
         </select>
       </label>
       {preset === 'custom' ? (
-        <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium">From</span>
-            <input
-              type="date"
-              className="input w-full sm:w-40"
+        <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium" aria-hidden="true">
+              From
+            </span>
+            <DateInput
+              className="sm:w-48"
+              aria-label="From"
               value={range.from}
               max={range.to}
-              required
-              onChange={(event) => {
-                if (event.target.value) setCustom({ ...range, from: event.target.value })
+              onChange={(from) => {
+                if (from) setCustom({ ...range, from })
               }}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium">To</span>
-            <input
-              type="date"
-              className="input w-full sm:w-40"
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium" aria-hidden="true">
+              To
+            </span>
+            <DateInput
+              className="sm:w-48"
+              aria-label="To"
               value={range.to}
               min={range.from}
-              required
-              onChange={(event) => {
-                if (event.target.value) setCustom({ ...range, to: event.target.value })
+              onChange={(to) => {
+                if (to) setCustom({ ...range, to })
               }}
             />
-          </label>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-base-content/80 sm:pb-2.5" aria-live="polite">

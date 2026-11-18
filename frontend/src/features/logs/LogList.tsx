@@ -126,11 +126,9 @@ function LogRow({
             {log.category.label}
           </span>
           {log.om_project && <span className="break-words">· O&M: {log.om_project.label}</span>}
-          {log.task && <span className="break-all">· Task: {log.task.title}</span>}
         </p>
-        {log.title && <p className="mt-1 text-sm break-words">{log.title}</p>}
         {log.description && (
-          <p className="mt-1 line-clamp-3 text-sm break-words whitespace-pre-line text-base-content/80">
+          <p className="mt-1 line-clamp-3 text-sm break-words whitespace-pre-line">
             {log.description}
           </p>
         )}

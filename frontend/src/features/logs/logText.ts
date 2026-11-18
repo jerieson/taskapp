@@ -4,7 +4,7 @@ import { formatHours } from '../../lib/format'
 
 /** One line naming a log, e.g. for toasts and delete confirmations. */
 export function logLabel(log: ProdLog): string {
-  return log.title ? `${log.activity.label}: ${log.title}` : log.activity.label
+  return log.activity.label
 }
 
 /** "2 h", "2 h of 3 h planned" or "3 h planned". */

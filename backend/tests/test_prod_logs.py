@@ -17,7 +17,6 @@ from tests.factories import (
     make_linked,
     make_log,
     make_project,
-    make_task,
     make_team,
     make_user,
 )
@@ -38,7 +37,7 @@ async def _body(db: AsyncSession, **kw: object) -> dict[str, object]:
     refs = await make_linked(db)
     return {
         "log_date": TODAY.isoformat(),
-        "title": "Worked",
+        "description": "Worked",
         "hours_spent": 2,
         **refs.ids(),
         **kw,
@@ -89,7 +88,7 @@ async def test_cannot_touch_another_users_log(
 
     url = f"/api/logs/{log.id}"
     assert (await client.get(url)).status_code == 404
-    assert (await client.patch(url, json={"title": "Mine"})).status_code == 404
+    assert (await client.patch(url, json={"description": "Mine"})).status_code == 404
     assert (await client.delete(url)).status_code == 404
     listed = (await client.get("/api/logs")).json()
     assert log.id not in [item["id"] for item in listed["items"]]
@@ -108,12 +107,10 @@ async def test_own_list_excludes_others_even_for_admin(
 async def test_update_and_delete_own(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
     log = await make_log(db, user=me, description="old")
-    resp = await client.patch(
-        f"/api/logs/{log.id}", json={"title": "New", "description": "", "hours_spent": 3.5}
-    )
+    resp = await client.patch(f"/api/logs/{log.id}", json={"description": "", "hours_spent": 3.5})
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert (body["title"], body["description"], body["hours_spent"]) == ("New", None, 3.5)
+    assert (body["description"], body["hours_spent"]) == (None, 3.5)
 
     assert (await client.delete(f"/api/logs/{log.id}")).status_code == 204
     assert await db.get(ProdLog, log.id) is None
@@ -125,58 +122,19 @@ async def test_validation(client: AsyncClient, db: AsyncSession) -> None:
         resp = await client.post("/api/logs", json=await _body(db, hours_spent=hours))
         assert resp.status_code == 422, hours
         assert "hours_spent" in resp.json()["error"]["fields"]
-    resp = await client.post("/api/logs", json=await _body(db, title="  "))
-    assert resp.status_code == 422
+    resp = await client.post("/api/logs", json=await _body(db, title="Old note field"))
+    assert resp.status_code == 201  # unknown fields are ignored; there is no note any more
+    assert "title" not in resp.json()
     log = await make_log(db)
     resp = await client.patch(f"/api/logs/{log.id}", json={"category_id": None})
     assert resp.status_code == 422
 
 
-# ---------------------------------------------------------------- tasks and references
+# ---------------------------------------------------------------- references
 
 
-async def test_task_must_belong_to_author(client: AsyncClient, db: AsyncSession) -> None:
-    me = await login_as(client, db)
-    foreign = await make_task(db)
-    resp = await client.post("/api/logs", json=await _body(db, task_id=foreign.id))
-    assert resp.status_code == 422
-    assert resp.json()["error"]["fields"] == {"task_id": "Choose one of the author's own tasks"}
-
-    log = await make_log(db, user=me)
-    resp = await client.patch(f"/api/logs/{log.id}", json={"task_id": foreign.id})
-    assert resp.status_code == 422
-
-
-async def test_project_and_category_copied_from_task(client: AsyncClient, db: AsyncSession) -> None:
-    me = await login_as(client, db)
-    refs = await make_linked(db)
-    category, project = refs.category, refs.project
-    task = await make_task(db, user=me, category_id=category.id, project_id=project.id)
-    base = {"log_date": TODAY.isoformat(), "hours_spent": 1, "activity_id": refs.activity.id}
-    resp = await client.post("/api/logs", json={**base, "task_id": task.id})
-    assert resp.status_code == 201, resp.text
-    body = resp.json()
-    assert body["category"]["id"] == category.id
-    assert body["project"]["id"] == project.id
-    assert body["task"] == {"id": task.id, "title": task.title}
-
-    # Explicit values win.
-    other = await make_category(db)
-    project.categories.append(other)
-    await db.flush()
-    resp = await client.post(
-        "/api/logs", json={**base, "task_id": task.id, "category_id": other.id}
-    )
-    assert resp.status_code == 201, resp.text
-    assert resp.json()["category"]["id"] == other.id
-    # An explicit null project is not replaced by the task's: new rows need a project.
-    resp = await client.post("/api/logs", json={**base, "task_id": task.id, "project_id": None})
-    assert resp.status_code == 422
-    assert "project_id" in resp.json()["error"]["fields"]
-
-
-async def test_category_required_without_task(client: AsyncClient, db: AsyncSession) -> None:
-    me = await login_as(client, db)
+async def test_category_and_project_required(client: AsyncClient, db: AsyncSession) -> None:
+    await login_as(client, db)
     refs = await make_linked(db)
     body = {
         "log_date": TODAY.isoformat(),
@@ -187,12 +145,11 @@ async def test_category_required_without_task(client: AsyncClient, db: AsyncSess
     resp = await client.post("/api/logs", json=body)
     assert resp.status_code == 422
     assert "category_id" in resp.json()["error"]["fields"]
-    # A task with an inactive category doesn't supply one either.
-    inactive = await make_category(db, is_active=False)
-    task = await make_task(db, user=me, category_id=inactive.id)
-    resp = await client.post("/api/logs", json={**body, "task_id": task.id})
+    resp = await client.post(
+        "/api/logs", json={**body, "category_id": refs.category.id, "project_id": None}
+    )
     assert resp.status_code == 422
-    assert "category_id" in resp.json()["error"]["fields"]
+    assert "project_id" in resp.json()["error"]["fields"]
 
 
 async def test_inactive_values_rejected_on_create_kept_on_update(
@@ -209,7 +166,11 @@ async def test_inactive_values_rejected_on_create_kept_on_update(
     log = await make_log(db, user=me, category_id=inactive_cat.id, project_id=inactive_proj.id)
     resp = await client.patch(
         f"/api/logs/{log.id}",
-        json={"title": "Edited", "category_id": inactive_cat.id, "project_id": inactive_proj.id},
+        json={
+            "description": "Edited",
+            "category_id": inactive_cat.id,
+            "project_id": inactive_proj.id,
+        },
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["category"]["is_active"] is False
@@ -217,16 +178,6 @@ async def test_inactive_values_rejected_on_create_kept_on_update(
     other_inactive = await make_category(db, is_active=False)
     resp = await client.patch(f"/api/logs/{log.id}", json={"category_id": other_inactive.id})
     assert resp.status_code == 422
-
-
-async def test_deleting_task_keeps_log(client: AsyncClient, db: AsyncSession) -> None:
-    me = await login_as(client, db)
-    task = await make_task(db, user=me)
-    log = await make_log(db, user=me, task=task)
-    assert (await client.delete(f"/api/tasks/{task.id}")).status_code == 204
-    body = (await client.get(f"/api/logs/{log.id}")).json()
-    assert body["task_id"] is None
-    assert body["task"] is None
 
 
 # ---------------------------------------------------------------- 24-hour cap
@@ -257,7 +208,7 @@ async def test_daily_cap_on_update(client: AsyncClient, db: AsyncSession) -> Non
     )
 
     # Its own previous hours are not double-counted.
-    assert (await client.patch(f"/api/logs/{log.id}", json={"title": "x"})).status_code == 200
+    assert (await client.patch(f"/api/logs/{log.id}", json={"description": "x"})).status_code == 200
     resp = await client.patch(f"/api/logs/{log.id}", json={"hours_spent": 4.5})
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "daily_hours_exceeded"
@@ -285,7 +236,7 @@ async def test_admin_edit_sets_updated_by(client: AsyncClient, db: AsyncSession)
     log = await make_log(db, user=author)
     admin = await login_as(client, db, role=Role.ADMIN)
 
-    resp = await client.patch(f"/api/logs/{log.id}", json={"title": "Fixed by admin"})
+    resp = await client.patch(f"/api/logs/{log.id}", json={"description": "Fixed by admin"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["updated_by"] == {"id": admin.id, "username": admin.username}
@@ -298,16 +249,6 @@ async def test_admin_edit_sets_updated_by(client: AsyncClient, db: AsyncSession)
     assert (await client.delete(f"/api/logs/{log.id}")).status_code == 204
 
 
-async def test_admin_does_not_see_authors_task_title(client: AsyncClient, db: AsyncSession) -> None:
-    author = await make_user(db)
-    task = await make_task(db, user=author)
-    log = await make_log(db, user=author, task=task)
-    await login_as(client, db, role=Role.ADMIN)
-    body = (await client.get(f"/api/logs/{log.id}")).json()
-    assert body["task_id"] == task.id
-    assert body["task"] is None
-
-
 async def test_manager_can_read_but_not_write_team_log(
     client: AsyncClient, db: AsyncSession
 ) -> None:
@@ -317,11 +258,11 @@ async def test_manager_can_read_but_not_write_team_log(
 
     url = f"/api/logs/{log.id}"
     assert (await client.get(url)).status_code == 200
-    resp = await client.patch(url, json={"title": "Manager edit"})
+    resp = await client.patch(url, json={"description": "Manager edit"})
     assert resp.status_code == 403
     assert (await client.delete(url)).status_code == 403
     await db.refresh(log)
-    assert log.title != "Manager edit"
+    assert log.description != "Manager edit"
     assert log.updated_by == member.id
 
 
@@ -378,7 +319,7 @@ async def test_team_change_keeps_logs_with_old_team(client: AsyncClient, db: Asy
     new_log_id = (await client.post("/api/logs", json=await _body(db))).json()["id"]
     # Editing the old log afterwards doesn't move it either.
     assert (
-        await client.patch(f"/api/logs/{old_log_id}", json={"title": "Still old"})
+        await client.patch(f"/api/logs/{old_log_id}", json={"description": "Still old"})
     ).status_code == 200
 
     old_log = await db.get(ProdLog, old_log_id)
@@ -426,9 +367,8 @@ async def test_filters_and_day_totals(client: AsyncClient, db: AsyncSession) -> 
     yesterday = TODAY - timedelta(days=1)
     project = await make_project(db)
     category = await make_category(db)
-    task = await make_task(db, user=me)
     a = await make_log(db, user=me, hours_spent=Decimal("2"), project_id=project.id)
-    b = await make_log(db, user=me, hours_spent=Decimal("1.5"), category_id=category.id, task=task)
+    b = await make_log(db, user=me, hours_spent=Decimal("1.5"), category_id=category.id)
     c = await make_log(db, user=me, log_date=yesterday, hours_spent=Decimal("3"))
 
     items = (await client.get("/api/logs")).json()["items"]
@@ -444,7 +384,6 @@ async def test_filters_and_day_totals(client: AsyncClient, db: AsyncSession) -> 
     assert await ids(date_to=yesterday.isoformat()) == [c.id]
     assert await ids(project_id=project.id) == [a.id]
     assert await ids(category_id=category.id) == [b.id]
-    assert await ids(task_id=task.id) == [b.id]
 
     # Day totals cover the filtered logs on every page, not just this page.
     page = (await client.get("/api/logs", params={"limit": 1})).json()

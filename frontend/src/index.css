@@ -125,3 +125,28 @@
   border-color: var(--color-error);
   box-shadow: 0 0 0 1px var(--color-error);
 }
+
+/*
+ * Date picker popover (components/DateInput.tsx): a small gap under the field, and
+ * flip above it (or to the other side) when there is no room below.
+ */
+.date-popover {
+  margin-block: 0.25rem;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+}
+
+/*
+ * Long selected values (activities, O&M projects): Chrome's customizable select
+ * (appearance: base-select) lets the text run under the arrow. Use the classic
+ * rendering, which keeps daisyUI's arrow and cuts the text off with an ellipsis.
+ */
+select.select {
+  appearance: none;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

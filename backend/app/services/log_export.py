@@ -66,12 +66,6 @@ def _cell(value: str | None) -> str:
     return f"'{value}" if value.startswith(_FORMULA_START) else value
 
 
-def _remarks(log: ProdLog) -> str:
-    """The sheet has no column for the short note, so it leads the remarks."""
-    parts = [p for p in (log.title, log.description) if p]
-    return " - ".join(parts)
-
-
 async def _scope(db: AsyncSession, user: User, user_id: int | None) -> tuple[User, int | None]:
     """The person being exported and, for managers, the team snapshot to filter on."""
     if user_id is None or user_id == user.id:
@@ -141,7 +135,7 @@ async def export_csv(
                 _cell(activity),
                 _cell(om_project),
                 _cell(reason),
-                _cell(_remarks(log)),
+                _cell(log.description),
                 sheet_date(created.astimezone(settings.tz).date()),
             ]
         )

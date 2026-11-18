@@ -1,21 +1,20 @@
 import { useState } from 'react'
 
 import { errorMessage } from '../../api/client'
-import {
-  useDeleteLog,
-  useLogs,
-  type LogFilters,
-  type ProdLog,
-  type ProdLogItem,
-} from '../../api/logs'
-import { useTaskOptions } from '../../api/tasks'
+import { useDeleteLog, useLogs, type LogFilters, type ProdLogItem } from '../../api/logs'
 import AsyncState from '../../components/AsyncState'
 import ConfirmModal from '../../components/ConfirmModal'
 import EmptyState from '../../components/EmptyState'
 import FilterPanel, { LookupFilter } from '../../components/FilterPanel'
-import { InputField, SelectField } from '../../components/FormField'
-import { ClockIcon, FilterIcon, PencilIcon, PlusIcon, TrashIcon } from '../../components/icons'
-import Modal from '../../components/Modal'
+import { DateField } from '../../components/DateInput'
+import {
+  ClockIcon,
+  CopyIcon,
+  FilterIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+} from '../../components/icons'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useToast } from '../../components/toast-context'
@@ -23,7 +22,7 @@ import { formatDay } from '../../lib/format'
 import AiLogEntry from '../ai/AiLogEntry'
 import { PlanReminder } from '../today/PlanningParts'
 import ExportLogs from './ExportLogs'
-import LogFormBody from './LogForm'
+import LogFormModal, { type LogModalState } from './LogFormModal'
 import LogList, { LogListSkeleton } from './LogList'
 import { logHours, logLabel } from './logText'
 
@@ -34,7 +33,6 @@ interface FilterState {
   project: string
   category: string
   activity: string
-  task: string
 }
 
 const NO_FILTERS: FilterState = {
@@ -43,7 +41,6 @@ const NO_FILTERS: FilterState = {
   project: '',
   category: '',
   activity: '',
-  task: '',
 }
 
 const optionalId = (value: string) => (value ? Number(value) : undefined)
@@ -55,27 +52,7 @@ function toLogFilters(f: FilterState): LogFilters {
     project_id: optionalId(f.project),
     category_id: optionalId(f.category),
     activity_id: optionalId(f.activity),
-    task_id: optionalId(f.task),
   }
-}
-
-function TaskFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const tasks = useTaskOptions(false)
-  return (
-    <SelectField
-      label="Task"
-      value={value}
-      disabled={tasks.isPending}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      <option value="">Any task</option>
-      {tasks.data?.map((task) => (
-        <option key={task.id} value={task.id}>
-          {task.title}
-        </option>
-      ))}
-    </SelectField>
-  )
 }
 
 function Filters({
@@ -89,19 +66,21 @@ function Filters({
   const set = (patch: Partial<FilterState>) => onChange({ ...value, ...patch })
   return (
     <FilterPanel activeCount={activeCount} onClear={() => onChange(NO_FILTERS)}>
-      <InputField
+      <DateField
         label="From"
-        type="date"
+        placeholder="Any date"
+        clearable
         value={value.dateFrom}
         max={value.dateTo || undefined}
-        onChange={(event) => set({ dateFrom: event.target.value })}
+        onChange={(dateFrom) => set({ dateFrom })}
       />
-      <InputField
+      <DateField
         label="Until"
-        type="date"
+        placeholder="Any date"
+        clearable
         value={value.dateTo}
         min={value.dateFrom || undefined}
-        onChange={(event) => set({ dateTo: event.target.value })}
+        onChange={(dateTo) => set({ dateTo })}
       />
       <LookupFilter
         kind="projects"
@@ -124,7 +103,6 @@ function Filters({
         value={value.activity}
         onChange={(activity) => set({ activity })}
       />
-      <TaskFilter value={value.task} onChange={(task) => set({ task })} />
     </FilterPanel>
   )
 }
@@ -135,8 +113,7 @@ export default function LogsPage() {
   const [offset, setOffset] = useState(0)
   const logs = useLogs(toLogFilters(filters), offset)
   const remove = useDeleteLog()
-  // undefined = closed, null = new log, ProdLog = edit.
-  const [editing, setEditing] = useState<ProdLog | null | undefined>(undefined)
+  const [modal, setModal] = useState<LogModalState | null>(null)
   const [deleting, setDeleting] = useState<ProdLogItem | null>(null)
 
   const hasFilters = Object.values(filters).some(Boolean)
@@ -157,7 +134,7 @@ export default function LogsPage() {
   }
 
   const newButton = (
-    <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
+    <button type="button" className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>
       <PlusIcon />
       New log
     </button>
@@ -167,7 +144,7 @@ export default function LogsPage() {
     <>
       <PageHeader
         title="Logs"
-        description="Your productivity log: planned hours ahead of time, actual hours afterwards. A day can hold at most 24 planned and 24 actual hours."
+        description="Your productivity log: planned hours ahead of time, actual hours afterwards."
         actions={
           <>
             <ExportLogs />
@@ -213,9 +190,22 @@ export default function LogsPage() {
             totalLabel="Total"
             actions={(log) => (
               <>
-                <button type="button" className="btn btn-sm" onClick={() => setEditing(log)}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setModal({ kind: 'edit', log })}
+                >
                   <PencilIcon className="size-4" />
                   Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setModal({ kind: 'copy', log })}
+                  aria-label={`Copy ${logLabel(log)} to other days`}
+                >
+                  <CopyIcon className="size-4" />
+                  Copy
                 </button>
                 <button
                   type="button"
@@ -240,15 +230,7 @@ export default function LogsPage() {
         />
       )}
 
-      <Modal
-        open={editing !== undefined}
-        title={editing ? 'Edit log' : 'New log'}
-        onClose={() => setEditing(undefined)}
-      >
-        {editing !== undefined && (
-          <LogFormBody log={editing} isOwn onDone={() => setEditing(undefined)} />
-        )}
-      </Modal>
+      <LogFormModal state={modal} onClose={() => setModal(null)} />
 
       <ConfirmModal
         open={deleting !== null}

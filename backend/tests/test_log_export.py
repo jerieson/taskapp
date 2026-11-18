@@ -50,7 +50,6 @@ async def test_columns_and_formats(client: AsyncClient, db: AsyncSession) -> Non
         is_planned=True,
         om_project_id=om.id,
         deviation_reason_id=reason.id,
-        title="UAT",
         description="With the client",
         created_at=datetime(2026, 11, 2, 23, 0, tzinfo=UTC),
         **refs.ids(),
@@ -61,7 +60,7 @@ async def test_columns_and_formats(client: AsyncClient, db: AsyncSession) -> Non
         log_date=date(2026, 11, 4),
         hours_spent=Decimal(1),
         is_planned=False,
-        title=None,
+        description=None,
         **refs.ids(),
     )
 
@@ -94,7 +93,7 @@ async def test_columns_and_formats(client: AsyncClient, db: AsyncSession) -> Non
         refs.activity.label,
         "[SFA-App] Collection",
         "Scope Creep (test)",
-        "UAT - With the client",
+        "With the client",
         "2-Nov-2026",
     ]
     assert second[:5] == ["4-Nov-2026", "On-Site", "", "1.00", "Unplanned"]
@@ -117,11 +116,11 @@ async def test_sorted_by_date_then_creation_and_range(
 ) -> None:
     user = await login_as(client, db)
     t = datetime(2026, 11, 1, tzinfo=UTC)
-    await make_log(db, user=user, log_date=date(2026, 11, 5), title="c", created_at=t)
-    await make_log(db, user=user, log_date=NOV_3, title="b", created_at=t.replace(hour=5))
-    await make_log(db, user=user, log_date=NOV_3, title="a", created_at=t)
-    await make_log(db, user=user, log_date=date(2026, 12, 1), title="out of range")
-    await make_log(db, user=user, log_date=date(2026, 10, 31), title="out of range")
+    await make_log(db, user=user, log_date=date(2026, 11, 5), description="c", created_at=t)
+    await make_log(db, user=user, log_date=NOV_3, description="b", created_at=t.replace(hour=5))
+    await make_log(db, user=user, log_date=NOV_3, description="a", created_at=t)
+    await make_log(db, user=user, log_date=date(2026, 12, 1), description="out of range")
+    await make_log(db, user=user, log_date=date(2026, 10, 31), description="out of range")
     rows = _rows(await _export(client))
     assert [r[10] for r in rows[1:]] == ["a", "b", "c"]
 
@@ -133,7 +132,6 @@ async def test_formula_injection_escaped(client: AsyncClient, db: AsyncSession) 
             db,
             user=user,
             log_date=NOV_3,
-            title=None,
             description=text,
             created_at=datetime(2026, 11, 1, i, tzinfo=UTC),
         )
@@ -161,9 +159,9 @@ async def test_manager_exports_team_snapshot_only(client: AsyncClient, db: Async
     other = await make_team(db)
     await login_as(client, db, Role.MANAGER, team=team)
     member = await make_user(db, team=team)
-    await make_log(db, user=member, log_date=NOV_3, title="in team")
+    await make_log(db, user=member, log_date=NOV_3, description="in team")
     # Written while in another team: stays out of this manager's export.
-    await make_log(db, user=member, log_date=NOV_3, team_id=other.id, title="elsewhere")
+    await make_log(db, user=member, log_date=NOV_3, team_id=other.id, description="elsewhere")
     rows = _rows(await _export(client, user_id=member.id))
     assert [r[10] for r in rows[1:]] == ["in team"]
 
@@ -173,8 +171,8 @@ async def test_manager_former_member_and_outsiders(client: AsyncClient, db: Asyn
     other = await make_team(db)
     await login_as(client, db, Role.MANAGER, team=team)
     moved = await make_user(db, team=other)
-    await make_log(db, user=moved, log_date=NOV_3, team_id=team.id, title="before move")
-    await make_log(db, user=moved, log_date=NOV_3, title="after move")
+    await make_log(db, user=moved, log_date=NOV_3, team_id=team.id, description="before move")
+    await make_log(db, user=moved, log_date=NOV_3, description="after move")
     rows = _rows(await _export(client, user_id=moved.id))
     assert [r[10] for r in rows[1:]] == ["before move"]
 
@@ -187,8 +185,8 @@ async def test_admin_exports_anyone(client: AsyncClient, db: AsyncSession) -> No
     await login_as(client, db, Role.ADMIN)
     team, other = await make_team(db), await make_team(db)
     user = await make_user(db, team=team, is_active=False)
-    await make_log(db, user=user, log_date=NOV_3, title="a")
-    await make_log(db, user=user, log_date=NOV_3, team_id=other.id, title="b")
+    await make_log(db, user=user, log_date=NOV_3, description="a")
+    await make_log(db, user=user, log_date=NOV_3, team_id=other.id, description="b")
     rows = _rows(await _export(client, user_id=user.id))
     assert sorted(r[10] for r in rows[1:]) == ["a", "b"]
     assert (await _export(client, user_id=999_999)).status_code == 404

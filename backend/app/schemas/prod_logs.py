@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 from app.core.pagination import PaginationParams
-from app.schemas.tasks import Description, LookupRef, ProjectRef, Title
+from app.schemas.tasks import Description, LookupRef, ProjectRef
 
 MAX_DAILY_HOURS = Decimal(24)
 
@@ -47,8 +47,6 @@ class _DateRange(PaginationParams):
 class ProdLogQuery(_DateRange):
     """The caller's own logs. All filters combine with AND."""
 
-    task_id: int | None = None
-
 
 class TeamLogQuery(_DateRange):
     """A team's logs (by the team snapshot on each log). All filters combine with AND."""
@@ -65,11 +63,6 @@ class UserRef(BaseModel):
 
     id: int
     username: str
-
-
-class TaskRef(BaseModel):
-    id: int
-    title: str
 
 
 class PlainRef(BaseModel):
@@ -101,11 +94,6 @@ class ProdLogOut(BaseModel):
     activity: LookupRef
     om_project: PlainRef | None
     """"Project (For O&M)"; only for categories that offer it."""
-    task_id: int | None
-    task: TaskRef | None
-    """The linked task. Only included for the author: tasks are private to their owner."""
-    title: str | None
-    """A short note."""
     description: str | None
     """Remarks."""
     deviation_reason: PlainRef | None
@@ -147,9 +135,7 @@ class ProdLogCreate(BaseModel):
 
     The linked dropdowns must fit together: the project is linked to the category, the
     activity is in the project's activity group, and an O&M project is only allowed when
-    the category offers it. When `task_id` is given and project/category are omitted,
-    they are copied from the task (if those values are still active). An omitted work
-    set-up is the default one.
+    the category offers it. An omitted work set-up is the default one.
     """
 
     log_date: date
@@ -157,13 +143,11 @@ class ProdLogCreate(BaseModel):
     planned_hours: Hours | None = None
     hours_spent: Hours | None = None
     category_id: int | None = None
-    """Required unless it can be copied from the task."""
+    """Required (null is reported as a field error)."""
     project_id: int | None = None
-    """Required unless it can be copied from the task."""
+    """Required (null is reported as a field error)."""
     activity_id: int
     om_project_id: int | None = None
-    task_id: int | None = None
-    title: Title | None = None
     description: Description | None = None
     deviation_reason_id: int | None = None
     is_planned: bool = True
@@ -189,8 +173,6 @@ class ProdLogUpdate(BaseModel):
     project_id: int | None = None
     activity_id: int | None = None
     om_project_id: int | None = None
-    task_id: int | None = None
-    title: Title | None = None
     description: Description | None = None
     deviation_reason_id: int | None = None
     is_planned: bool | None = None
@@ -212,36 +194,52 @@ class ProdLogUpdate(BaseModel):
         return self
 
 
-# ---------------------------------------------------------------- copy a plan
+# ---------------------------------------------------------------- bulk create
+
+MAX_BULK_ROWS = 31
+
+
+class ProdLogBulkCreate(BaseModel):
+    """Several rows at once (a date range in the log form, or an AI draft): all are
+    created or none. Each row is checked like a single create; the daily caps count the
+    rows before it in the same request. Field errors are keyed by row index, for example
+    `rows.2.category_id`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[ProdLogCreate] = Field(min_length=1, max_length=MAX_BULK_ROWS)
+
+
+class ProdLogBulkResult(BaseModel):
+    created: int
+    items: list[ProdLogOut]
+    """The new rows, in request order."""
+
+
+# ---------------------------------------------------------------- copy a week
 
 MAX_COPY_DAYS = 14
 
 
 class CopyLogs(BaseModel):
-    """Copy the caller's rows from one day, or one week, to days in open weeks.
+    """Copy the caller's rows from one week to days in open weeks.
 
-    `from_date`: every row of that day is copied to each of `to_dates`.
     `from_week` (any date in the source week): each row goes to the target date with
     the same weekday (Monday's rows to the Monday in `to_dates`, and so on).
     Copies are planned rows: planned hours = the source's planned hours, else its actual
-    hours; no actual hours. Category, project, activity, O&M project, work set-up, task
-    and note are kept.
+    hours; no actual hours. Category, project, activity, O&M project, work set-up and
+    remarks are kept (not the reason for deviation).
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    from_date: date | None = None
-    from_week: date | None = None
+    from_week: date
     to_dates: list[date] = Field(min_length=1, max_length=MAX_COPY_DAYS)
 
     @model_validator(mode="after")
-    def _one_source(self) -> Self:
-        if (self.from_date is None) == (self.from_week is None):
-            raise ValueError("Send either from_date or from_week")
+    def _unique(self) -> Self:
         if len(set(self.to_dates)) != len(self.to_dates):
             raise ValueError("to_dates must not repeat a date")
-        if self.from_date is not None and self.from_date in self.to_dates:
-            raise ValueError("to_dates must not include from_date")
         return self
 
 
@@ -250,7 +248,7 @@ class CopyDayResult(BaseModel):
     created: int
     """Rows created on this date."""
     skipped_reason: str | None
-    """`daily_hours_exceeded` (the copies would take the day over 24 planned hours, so
+    """`daily_hours_exceeded` (the copies would take the day over WORKDAY_HOURS planned, so
     none were made) or `nothing_to_copy` (no source rows for this date); null when rows
     were created."""
 

@@ -521,14 +521,14 @@ Do Phase 19 only.
 Backend:
 1. POST /api/ai/log-draft returns { rows: [...] } (max 20 rows). Each row as in CLAUDE.md, AI Layer, feature 1. Context adds activities, work set-ups and the weekday of today; the prompt explains planned (future or "I will") vs actual ("I did") rows, date ranges ("Tuesday to Friday"), and "per day" vs "per week" hours (per week is split evenly across the days and stated in missing_fields if ambiguous).
 2. Post-process per row as in Phase 13 and the linked-dropdown rules, plus: drop rows with no date; cap row count; a row in a locked week cannot carry planned hours (if its date is today or earlier, planned becomes actual; otherwise the hours are cleared and listed in missing_fields).
-3. POST /api/logs/bulk { rows[] }: create all or none, same validation and caps as single create; field errors keyed by row index (rows.2.category_id).
+3. Use the existing POST /api/logs/bulk { rows[] } (built in the log UX rework before Phase 18: all or none, same checks as single create, field errors keyed rows.N.field).
 
 Frontend:
 1. The AI card opens a review table/cards of draft rows: edit each row inline (same fields as the log form), remove rows, missing fields highlighted; "Save N rows" uses the bulk endpoint.
 2. Single-row drafts may still open the normal log form.
 
 Acceptance:
-- Tests with FakeProvider: multi-row output validated per row; foreign task IDs and inactive values stripped; bulk create all-or-nothing; caps enforced.
+- Tests with FakeProvider: multi-row output validated per row; invalid and inactive values stripped; saving the drafts through bulk create is all-or-nothing with caps enforced.
 - Manual check with the real provider: "I will work on the workforce API next week Tuesday to Friday 4 hrs a day" gives four planned rows; "next week 4 hrs a day" gives five (Monday to Friday); five other varied sentences give sensible drafts.
 - Usable at 360px in both themes.
 ```

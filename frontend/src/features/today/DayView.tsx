@@ -9,26 +9,26 @@ import { useState, type FormEvent } from 'react'
 
 import { useCurrentUser } from '../../api/auth'
 import { errorMessage } from '../../api/client'
-import {
-  useDeleteLog,
-  useLogsInRange,
-  useUpdateLog,
-  type ProdLog,
-  type ProdLogItem,
-} from '../../api/logs'
+import { useDeleteLog, useLogsInRange, useUpdateLog, type ProdLogItem } from '../../api/logs'
 import { useLogOptions } from '../../api/lookups'
 import { usePlanningStatus } from '../../api/planning'
 import AsyncState from '../../components/AsyncState'
 import ColorDot from '../../components/ColorDot'
 import ConfirmModal from '../../components/ConfirmModal'
 import EmptyState from '../../components/EmptyState'
-import { CalendarIcon, LockIcon, PencilIcon, PlusIcon, TrashIcon } from '../../components/icons'
-import Modal from '../../components/Modal'
+import {
+  CalendarIcon,
+  CopyIcon,
+  LockIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+} from '../../components/icons'
 import { SkeletonCard } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
 import { formatDay, formatHours, todayIso } from '../../lib/format'
 import AiLogEntry from '../ai/AiLogEntry'
-import LogFormBody from '../logs/LogForm'
+import LogFormModal, { type LogModalState } from '../logs/LogFormModal'
 import { logHours, logLabel } from '../logs/logText'
 import DateNav from './DateNav'
 import { useWeekOpen } from './planning'
@@ -144,10 +144,11 @@ interface RowProps {
   plannedLocked: boolean
   canDelete: boolean
   onEdit: () => void
+  onCopy: () => void
   onDelete: () => void
 }
 
-function TodayRow({ log, plannedLocked, canDelete, onEdit, onDelete }: RowProps) {
+function TodayRow({ log, plannedLocked, canDelete, onEdit, onCopy, onDelete }: RowProps) {
   const toast = useToast()
   const update = useUpdateLog()
   const edited = log.updated_by.id !== log.user.id
@@ -175,9 +176,12 @@ function TodayRow({ log, plannedLocked, canDelete, onEdit, onDelete }: RowProps)
           {log.project && <span aria-hidden="true">·</span>}
           <span>{log.category.label}</span>
           {log.om_project && <span className="break-words">· O&M: {log.om_project.label}</span>}
-          {log.task && <span className="break-all">· Task: {log.task.title}</span>}
         </p>
-        {log.title && <p className="mt-1 text-sm break-words">{log.title}</p>}
+        {log.description && (
+          <p className="mt-1 line-clamp-2 text-sm break-words whitespace-pre-line">
+            {log.description}
+          </p>
+        )}
         <p className="mt-1.5 flex flex-wrap gap-1.5">
           <span className="badge badge-sm badge-outline">{log.work_setup.label}</span>
           {!log.is_planned && <span className="badge badge-sm badge-secondary">Unplanned</span>}
@@ -219,6 +223,15 @@ function TodayRow({ log, plannedLocked, canDelete, onEdit, onDelete }: RowProps)
             <PencilIcon className="size-4" />
             Edit
           </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={onCopy}
+            aria-label={`Copy ${logLabel(log)} to other days`}
+          >
+            <CopyIcon className="size-4" />
+            Copy
+          </button>
           {canDelete && (
             <button
               type="button"
@@ -257,8 +270,7 @@ export default function DayView({
   const status = usePlanningStatus(date)
   const logs = useLogsInRange(date, date)
   const remove = useDeleteLog()
-  // undefined = closed, null = new row, ProdLog = edit.
-  const [editing, setEditing] = useState<ProdLog | null | undefined>(undefined)
+  const [modal, setModal] = useState<LogModalState | null>(null)
   const [deleting, setDeleting] = useState<ProdLogItem | null>(null)
 
   const weekOpen = useWeekOpen(status.data)
@@ -276,10 +288,15 @@ export default function DayView({
     })
   }
 
+  const addLabel = weekOpen ? 'Add planned activity' : 'Add unplanned activity'
   const addButton = (
-    <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
+    <button
+      type="button"
+      className="btn btn-primary"
+      onClick={() => setModal({ kind: 'new', date, title: addLabel })}
+    >
       <PlusIcon />
-      {weekOpen ? 'Add planned activity' : 'Add unplanned activity'}
+      {addLabel}
     </button>
   )
 
@@ -315,7 +332,8 @@ export default function DayView({
                   log={log}
                   plannedLocked={plannedLocked && !isAdmin}
                   canDelete={isAdmin || log.planned_hours === null || weekOpen}
-                  onEdit={() => setEditing(log)}
+                  onEdit={() => setModal({ kind: 'edit', log })}
+                  onCopy={() => setModal({ kind: 'copy', log })}
                   onDelete={() => setDeleting(log)}
                 />
               ))}
@@ -324,20 +342,7 @@ export default function DayView({
         )}
       </AsyncState>
 
-      <Modal
-        open={editing !== undefined}
-        title={editing ? 'Edit row' : weekOpen ? 'Add planned activity' : 'Add unplanned activity'}
-        onClose={() => setEditing(undefined)}
-      >
-        {editing !== undefined && (
-          <LogFormBody
-            log={editing}
-            isOwn
-            prefill={{ logDate: date }}
-            onDone={() => setEditing(undefined)}
-          />
-        )}
-      </Modal>
+      <LogFormModal state={modal} onClose={() => setModal(null)} />
 
       <ConfirmModal
         open={deleting !== null}

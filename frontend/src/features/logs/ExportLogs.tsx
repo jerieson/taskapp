@@ -7,7 +7,8 @@ import { useState, type FormEvent } from 'react'
 
 import { errorMessage } from '../../api/client'
 import { useExportLogs, useTeamMembers, type TeamMember } from '../../api/logs'
-import { InputField, SelectField, SubmitButton } from '../../components/FormField'
+import { DateField } from '../../components/DateInput'
+import { SelectField, SubmitButton } from '../../components/FormField'
 import { DownloadIcon } from '../../components/icons'
 import Modal from '../../components/Modal'
 import { useToast } from '../../components/toast-context'
@@ -192,21 +193,19 @@ function ExportForm({
         </SelectField>
       ) : (
         <div className="grid gap-x-4 sm:grid-cols-2">
-          <InputField
+          <DateField
             label="From"
-            type="date"
             value={from}
             max={to || undefined}
             error={errors.from}
-            onChange={(event) => setFrom(event.target.value)}
+            onChange={setFrom}
           />
-          <InputField
+          <DateField
             label="Until"
-            type="date"
             value={to}
             min={from || undefined}
             error={errors.to}
-            onChange={(event) => setTo(event.target.value)}
+            onChange={setTo}
           />
         </div>
       )}

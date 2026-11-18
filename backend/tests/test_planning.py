@@ -198,7 +198,7 @@ async def test_admin_override(client: AsyncClient, db: AsyncSession, set_now: Se
 # ---------------------------------------------------------------- copy
 
 
-async def test_copy_day_into_open_week(
+async def test_copy_week_skips_full_days(
     client: AsyncClient, db: AsyncSession, set_now: SetNow
 ) -> None:
     me = await login_as(client, db)
@@ -206,7 +206,7 @@ async def test_copy_day_into_open_week(
     set_now(WEDNESDAY)
     source = THIS_MONDAY + timedelta(days=1)
     await make_log(
-        db, user=me, log_date=source, hours_spent=Decimal(3), title="Review", **refs.ids()
+        db, user=me, log_date=source, hours_spent=Decimal(3), description="Review", **refs.ids()
     )
     await make_log(
         db,
@@ -214,10 +214,10 @@ async def test_copy_day_into_open_week(
         log_date=source,
         planned_hours=Decimal(2),
         hours_spent=Decimal(5),
-        title=None,
+        description=None,
         **refs.ids(),
     )
-    # Tuesday already has 20 planned hours: the 5 copied hours would pass 24.
+    # Next Tuesday already has 20 planned hours: the 5 copied hours would pass the cap.
     await make_log(
         db,
         user=me,
@@ -226,29 +226,28 @@ async def test_copy_day_into_open_week(
         hours_spent=None,
         **refs.ids(),
     )
-    targets = [MONDAY, MONDAY + timedelta(days=1), MONDAY + timedelta(days=2)]
+    targets = [MONDAY + timedelta(days=1), MONDAY + timedelta(days=8)]
     resp = await client.post(
         "/api/logs/copy",
-        json={"from_date": source.isoformat(), "to_dates": [d.isoformat() for d in targets]},
+        json={"from_week": source.isoformat(), "to_dates": [d.isoformat() for d in targets]},
     )
     assert resp.status_code == 200, resp.text
     result = resp.json()
-    assert result["created"] == 4
+    assert result["created"] == 2
     assert result["skipped_rows"] == 0
     assert [(d["date"], d["created"], d["skipped_reason"]) for d in result["days"]] == [
-        ("2026-11-23", 2, None),
         ("2026-11-24", 0, "daily_hours_exceeded"),
-        ("2026-11-25", 2, None),
+        ("2026-12-01", 2, None),
     ]
 
     copies = (
-        await client.get("/api/logs", params={"date_from": "2026-11-23", "date_to": "2026-11-23"})
+        await client.get("/api/logs", params={"date_from": "2026-12-01", "date_to": "2026-12-01"})
     ).json()["items"]
-    # Planned = source planned, else actual; no actual hours; planned rows; note kept.
+    # Planned = source planned, else actual; no actual hours; planned rows.
     assert sorted(c["planned_hours"] for c in copies) == [2, 3]
     assert {c["hours_spent"] for c in copies} == {None}
     assert {c["is_planned"] for c in copies} == {True}
-    assert {c["title"] for c in copies} == {"Review", None}
+    assert {c["description"] for c in copies} == {"Review", None}
 
 
 async def test_copy_only_into_open_weeks(
@@ -260,7 +259,7 @@ async def test_copy_only_into_open_weeks(
     set_now(AT_DEADLINE)
     resp = await client.post(
         "/api/logs/copy",
-        json={"from_date": THIS_MONDAY.isoformat(), "to_dates": [MONDAY.isoformat()]},
+        json={"from_week": THIS_MONDAY.isoformat(), "to_dates": [MONDAY.isoformat()]},
     )
     _locked(resp)
     assert "to_dates" in resp.json()["error"]["fields"]
@@ -306,13 +305,12 @@ async def test_copy_validation(client: AsyncClient, db: AsyncSession, set_now: S
     day = MONDAY.isoformat()
     for body in (
         {"to_dates": [day]},
-        {"from_date": "2026-11-17", "from_week": "2026-11-17", "to_dates": [day]},
-        {"from_date": "2026-11-17", "to_dates": []},
-        {"from_date": "2026-11-17", "to_dates": [day, day]},
-        {"from_date": day, "to_dates": [day]},
+        {"from_date": "2026-11-17", "to_dates": [day]},  # copying a day is gone
+        {"from_week": "2026-11-17", "to_dates": []},
+        {"from_week": "2026-11-17", "to_dates": [day, day]},
     ):
         assert (await client.post("/api/logs/copy", json=body)).status_code == 422, body
-    resp = await client.post("/api/logs/copy", json={"from_date": "2026-11-17", "to_dates": [day]})
+    resp = await client.post("/api/logs/copy", json={"from_week": "2026-11-17", "to_dates": [day]})
     assert resp.json()["error"]["code"] == "nothing_to_copy"
 
 

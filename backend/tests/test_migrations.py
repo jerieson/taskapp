@@ -164,3 +164,52 @@ def test_deviation_reasons_conversion_and_downgrade() -> None:
                 "DELETE FROM activities WHERE label = 'Reason activity'",
             ]
         )
+
+
+# ---------------------------------------------------------------- log title and task link
+
+BEFORE_DROP_TITLE = "1ab76ae928ea"
+
+
+def test_log_title_moves_into_remarks() -> None:
+    config = alembic_config()
+    command.downgrade(config, BEFORE_DROP_TITLE)
+    try:
+        insert_row = (
+            "INSERT INTO prod_logs (user_id, log_date, category_id, activity_id, work_setup_id, "
+            "hours_spent, title, description, updated_by) "
+            "SELECT u.id, '2026-11-02', c.id, a.id, w.id, 1, {title}, {description}, u.id "
+            "FROM users u, categories c, activities a, work_setups w "
+            "WHERE u.username = 'title_user' AND c.label = 'Title category' "
+            "AND a.label = 'Title activity' AND w.is_default"
+        )
+        _sql(
+            [
+                "INSERT INTO users (username, email, password_hash, role) "
+                "VALUES ('title_user', 'title@example.com', '!x', 'admin')",
+                "INSERT INTO categories (label) VALUES ('Title category')",
+                "INSERT INTO activities (label) VALUES ('Title activity')",
+                insert_row.format(title="'UAT'", description="'With the client'"),
+                insert_row.format(title="'Only a note'", description="NULL"),
+                insert_row.format(title="NULL", description="'Only remarks'"),
+            ]
+        )
+        command.upgrade(config, "head")
+
+        rows = _sql(
+            [],
+            "SELECT description FROM prod_logs l JOIN users u ON u.id = l.user_id "
+            "WHERE u.username = 'title_user' ORDER BY l.id",
+        )
+        assert [r[0] for r in rows] == ["UAT - With the client", "Only a note", "Only remarks"]
+    finally:
+        command.upgrade(config, "head")
+        _sql(
+            [
+                "DELETE FROM prod_logs WHERE user_id IN "
+                "(SELECT id FROM users WHERE username = 'title_user')",
+                "DELETE FROM users WHERE username = 'title_user'",
+                "DELETE FROM categories WHERE label = 'Title category'",
+                "DELETE FROM activities WHERE label = 'Title activity'",
+            ]
+        )

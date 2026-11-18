@@ -1,41 +1,26 @@
 """Natural-language log entry: turn free text into a draft prod log row. Nothing is
 saved; the frontend pre-fills the normal log form and the user confirms.
 
-The model only sees the caller's own open tasks and the active dropdown values (the
-same set the log form offers), and every ID it returns is checked again against those
-sets and the linked-dropdown rules before it reaches the client.
+The model only sees the active dropdown values (the same set the log form offers),
+and every ID it returns is checked again against those sets and the linked-dropdown
+rules before it reaches the client.
 """
 
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIClient
 from app.ai.prompts.nl_log_entry import SYSTEM, LogDraftLLM, build_prompt
-from app.models import Status, Task, User
+from app.models import User
 from app.models.enums import AIFeature
 from app.schemas.ai import LogDraftField, LogDraftOut
 from app.schemas.lookups import LogOptionProject, LogOptionsOut
-from app.schemas.tasks import Description, Title
+from app.schemas.tasks import Description
 from app.services.log_options import get_log_options
 
-# Bounds the prompt size for users with very many open tasks (most recent first).
-MAX_TASKS_IN_PROMPT = 100
-MAX_TITLE = Title.__metadata__[0].max_length or 200
 MAX_DESCRIPTION = Description.__metadata__[0].max_length or 10000
-
-
-async def _open_tasks(db: AsyncSession, user: User) -> dict[int, Task]:
-    rows = await db.scalars(
-        select(Task)
-        .join(Status, Status.id == Task.status_id)
-        .where(Task.user_id == user.id, ~Status.is_done)
-        .order_by(Task.updated_at.desc(), Task.id.desc())
-        .limit(MAX_TASKS_IN_PROMPT)
-    )
-    return {t.id: t for t in rows}
 
 
 def _text(value: str | None, max_length: int) -> str | None:
@@ -115,29 +100,15 @@ async def draft_log(
 ) -> LogDraftOut:
     """`max_hours` is the daily cap (WORKDAY_HOURS): larger hours are dropped."""
     options = await get_log_options(db, max_hours)
-    tasks = await _open_tasks(db, user)
-    prompt = build_prompt(
-        text=text,
-        today=today,
-        **_prompt_context(options),
-        tasks=[(t.id, t.title) for t in tasks.values()],
-    )
+    prompt = build_prompt(text=text, today=today, **_prompt_context(options))
 
     raw = await ai.generate_structured(
         user, AIFeature.NL_LOG_ENTRY, system=SYSTEM, prompt=prompt, schema=LogDraftLLM
     )
 
     linked = _Linked(options)
-    task_id = raw.task_id if raw.task_id in tasks else None
     category_id = raw.category_id if raw.category_id in linked.categories else None
     project_id = raw.project_id if linked.project_fits(raw.project_id, category_id) else None
-    if task_id is not None:
-        # Same as the log form: a chosen task pre-fills project and category.
-        task = tasks[task_id]
-        if category_id is None and task.category_id in linked.categories:
-            category_id = task.category_id
-        if project_id is None and linked.project_fits(task.project_id, category_id):
-            project_id = task.project_id
     if category_id is None and project_id is not None:
         only = linked.projects[project_id].category_ids
         category_id = only[0] if len(only) == 1 else None
@@ -161,8 +132,6 @@ async def draft_log(
         project_id=project_id,
         activity_id=activity_id,
         om_project_id=om_project_id,
-        task_id=task_id,
-        title=_text(raw.title, MAX_TITLE),
         description=_text(raw.description, MAX_DESCRIPTION),
         missing_fields=[],
     )

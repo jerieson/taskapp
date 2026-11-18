@@ -626,10 +626,32 @@ export interface paths {
         put?: never;
         /**
          * Create Log
-         * @description Rejected (422 `daily_hours_exceeded`) if the day would total more than 24 actual
-         *     or 24 planned hours, and (422 `week_locked`) for planned hours in a locked week.
+         * @description Rejected (422 `daily_hours_exceeded`) if the day would total more than
+         *     WORKDAY_HOURS actual or WORKDAY_HOURS planned hours, and (422 `week_locked`) for
+         *     planned hours in a locked week.
          */
         post: operations["create_log_api_logs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/logs/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Logs
+         * @description Create several of your rows at once: all or none. Same checks as a single create,
+         *     with field errors keyed by row index (`rows.2.category_id`).
+         */
+        post: operations["create_logs_api_logs_bulk_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -647,11 +669,11 @@ export interface paths {
         put?: never;
         /**
          * Copy Logs
-         * @description Copy your rows from a day or a week into days of open weeks, as planned rows.
+         * @description Copy your rows from a week into days of open weeks (by weekday), as planned rows.
          *
          *     Every target date must be in an open week (422 `week_locked`). Days that would pass
-         *     24 planned hours, and rows with inactive values, are skipped and reported. No source
-         *     rows: 422 `nothing_to_copy`.
+         *     WORKDAY_HOURS planned, and rows with inactive values, are skipped and reported. No
+         *     source rows: 422 `nothing_to_copy`.
          */
         post: operations["copy_logs_api_logs_copy_post"];
         delete?: never;
@@ -2234,20 +2256,20 @@ export interface components {
         };
         /**
          * CopyLogs
-         * @description Copy the caller's rows from one day, or one week, to days in open weeks.
+         * @description Copy the caller's rows from one week to days in open weeks.
          *
-         *     `from_date`: every row of that day is copied to each of `to_dates`.
          *     `from_week` (any date in the source week): each row goes to the target date with
          *     the same weekday (Monday's rows to the Monday in `to_dates`, and so on).
          *     Copies are planned rows: planned hours = the source's planned hours, else its actual
-         *     hours; no actual hours. Category, project, activity, O&M project, work set-up, task
-         *     and note are kept.
+         *     hours; no actual hours. Category, project, activity, O&M project and work set-up are
+         *     kept.
          */
         CopyLogs: {
-            /** From Date */
-            from_date?: string | null;
-            /** From Week */
-            from_week?: string | null;
+            /**
+             * From Week
+             * Format: date
+             */
+            from_week: string;
             /** To Dates */
             to_dates: string[];
         };
@@ -2610,10 +2632,6 @@ export interface components {
             activity_id: number | null;
             /** Om Project Id */
             om_project_id: number | null;
-            /** Task Id */
-            task_id: number | null;
-            /** Title */
-            title: string | null;
             /** Description */
             description: string | null;
             /** Missing Fields */
@@ -3243,6 +3261,24 @@ export interface components {
             description?: string | null;
         };
         /**
+         * ProdLogBulkCreate
+         * @description Several rows at once (a date range in the log form, or an AI draft): all are
+         *     created or none. Each row is checked like a single create; the daily caps count the
+         *     rows before it in the same request. Field errors are keyed by row index, for example
+         *     `rows.2.category_id`.
+         */
+        ProdLogBulkCreate: {
+            /** Rows */
+            rows: components["schemas"]["ProdLogCreate"][];
+        };
+        /** ProdLogBulkResult */
+        ProdLogBulkResult: {
+            /** Created */
+            created: number;
+            /** Items */
+            items: components["schemas"]["ProdLogOut"][];
+        };
+        /**
          * ProdLogCreate
          * @description A row needs planned hours, actual hours, or both.
          *
@@ -3253,9 +3289,7 @@ export interface components {
          *
          *     The linked dropdowns must fit together: the project is linked to the category, the
          *     activity is in the project's activity group, and an O&M project is only allowed when
-         *     the category offers it. When `task_id` is given and project/category are omitted,
-         *     they are copied from the task (if those values are still active). An omitted work
-         *     set-up is the default one.
+         *     the category offers it. An omitted work set-up is the default one.
          */
         ProdLogCreate: {
             /**
@@ -3277,10 +3311,6 @@ export interface components {
             activity_id: number;
             /** Om Project Id */
             om_project_id?: number | null;
-            /** Task Id */
-            task_id?: number | null;
-            /** Title */
-            title?: string | null;
             /** Description */
             description?: string | null;
             /** Deviation Reason Id */
@@ -3314,11 +3344,6 @@ export interface components {
             project: components["schemas"]["ProjectRef"] | null;
             activity: components["schemas"]["LookupRef"];
             om_project: components["schemas"]["PlainRef"] | null;
-            /** Task Id */
-            task_id: number | null;
-            task: components["schemas"]["TaskRef"] | null;
-            /** Title */
-            title: string | null;
             /** Description */
             description: string | null;
             deviation_reason: components["schemas"]["PlainRef"] | null;
@@ -3361,11 +3386,6 @@ export interface components {
             project: components["schemas"]["ProjectRef"] | null;
             activity: components["schemas"]["LookupRef"];
             om_project: components["schemas"]["PlainRef"] | null;
-            /** Task Id */
-            task_id: number | null;
-            task: components["schemas"]["TaskRef"] | null;
-            /** Title */
-            title: string | null;
             /** Description */
             description: string | null;
             deviation_reason: components["schemas"]["PlainRef"] | null;
@@ -3409,10 +3429,6 @@ export interface components {
             activity_id?: number | null;
             /** Om Project Id */
             om_project_id?: number | null;
-            /** Task Id */
-            task_id?: number | null;
-            /** Title */
-            title?: string | null;
             /** Description */
             description?: string | null;
             /** Deviation Reason Id */
@@ -3729,13 +3745,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-        };
-        /** TaskRef */
-        TaskRef: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
         };
         /**
          * TaskSort
@@ -5543,7 +5552,6 @@ export interface operations {
                 project_id?: number | null;
                 category_id?: number | null;
                 activity_id?: number | null;
-                task_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -5600,6 +5608,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProdLogOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_logs_api_logs_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProdLogBulkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProdLogBulkResult"];
                 };
             };
             /** @description Client error */

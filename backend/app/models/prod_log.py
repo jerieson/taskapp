@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Identity, Index, String, Text, true
+from sqlalchemy import CheckConstraint, ForeignKey, Identity, Index, Text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -27,9 +27,6 @@ class ProdLog(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="RESTRICT"))
-    task_id: Mapped[int | None] = mapped_column(
-        ForeignKey("tasks.id", ondelete="SET NULL"), index=True
-    )
     log_date: Mapped[date]
     work_setup_id: Mapped[int] = mapped_column(
         ForeignKey("work_setups.id", ondelete="RESTRICT"), index=True
@@ -37,8 +34,7 @@ class ProdLog(TimestampMixin, Base):
     activity_id: Mapped[int] = mapped_column(
         ForeignKey("activities.id", ondelete="RESTRICT"), index=True
     )
-    # A short note; "Remarks" in the sheet is `description`.
-    title: Mapped[str | None] = mapped_column(String(200))
+    # "Remarks".
     description: Mapped[str | None] = mapped_column(Text)
     # Nullable for old rows; the service requires it on new rows.
     project_id: Mapped[int | None] = mapped_column(

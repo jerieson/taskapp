@@ -19,11 +19,12 @@ import {
   type TeamLogFilters,
   type TeamMember,
 } from '../../api/logs'
+import { DateField } from '../../components/DateInput'
 import AsyncState from '../../components/AsyncState'
 import ConfirmModal from '../../components/ConfirmModal'
 import EmptyState from '../../components/EmptyState'
 import FilterPanel, { LookupFilter } from '../../components/FilterPanel'
-import { InputField, SelectField } from '../../components/FormField'
+import { SelectField } from '../../components/FormField'
 import { ClockIcon, FilterIcon, PencilIcon, TrashIcon, UsersIcon } from '../../components/icons'
 import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
@@ -101,19 +102,21 @@ function Filters({
           </option>
         ))}
       </SelectField>
-      <InputField
+      <DateField
         label="From"
-        type="date"
+        placeholder="Any date"
+        clearable
         value={value.dateFrom}
         max={value.dateTo || undefined}
-        onChange={(event) => set({ dateFrom: event.target.value })}
+        onChange={(dateFrom) => set({ dateFrom })}
       />
-      <InputField
+      <DateField
         label="Until"
-        type="date"
+        placeholder="Any date"
+        clearable
         value={value.dateTo}
         min={value.dateFrom || undefined}
-        onChange={(event) => set({ dateTo: event.target.value })}
+        onChange={(dateTo) => set({ dateTo })}
       />
       <LookupFilter
         kind="projects"

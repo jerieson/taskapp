@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts.nl_log_entry import LogDraftLLM
 from app.core.config import Settings, get_settings
-from app.models import Role, WorkSetup
+from app.models import WorkSetup
 from app.models.ai import AIRequest
 from app.models.enums import AIFeature
 from tests.ai_fakes import FakeProvider
@@ -26,7 +26,6 @@ from tests.factories import (
     make_linked,
     make_om_project,
     make_project,
-    make_status,
     make_task,
     make_work_setup,
 )
@@ -53,9 +52,7 @@ def _llm(**kw: Any) -> LogDraftLLM:
         "project_id": None,
         "activity_id": None,
         "om_project_id": None,
-        "task_id": None,
-        "title": "Fixed login redirect",
-        "description": None,
+        "description": "Fixed login redirect",
     }
     return LogDraftLLM(**{**fields, **kw})
 
@@ -81,17 +78,14 @@ async def test_valid_draft_passes_through(
     refs = await make_linked(db, requires_om_project=True)
     om = await make_om_project(db)
     setup = await make_work_setup(db)
-    task = await make_task(db, user=user)
 
     body = await _draft(
         client,
         fake_ai,
-        title="  Fixed login redirect  ",
-        description="Cookie path was wrong",
+        description="  Cookie path was wrong  ",
         work_setup_id=setup.id,
         planned_hours=3,
         om_project_id=om.id,
-        task_id=task.id,
         **refs.ids(),
     )
 
@@ -102,8 +96,6 @@ async def test_valid_draft_passes_through(
         "hours_spent": 2.5,
         **refs.ids(),
         "om_project_id": om.id,
-        "task_id": task.id,
-        "title": "Fixed login redirect",
         "description": "Cookie path was wrong",
         "missing_fields": [],
     }
@@ -124,24 +116,20 @@ async def test_prompt_holds_only_allowed_context(
     await make_om_project(db, label="[SFA-App] Collection")
     await make_work_setup(db, label="Hybrid")
     await make_task(db, user=user, title="My open task")
-    done = await make_status(db, is_done=True)
-    await make_task(db, user=user, title="My finished task", status_id=done.id)
-    await make_task(db, title="Someone else's task")
 
     await _draft(client, fake_ai, category_id=active.id)
 
     call = fake_ai.calls[0]
     assert call["schema"] is LogDraftLLM
     prompt: str = call["user"]
-    shown = ("Coding", "Apollo", "My open task", "Testing: UAT", "[SFA-App] Collection", "Hybrid")
+    shown = ("Coding", "Apollo", "Testing: UAT", "[SFA-App] Collection", "Hybrid")
     for value in shown:
         assert value in prompt
     hidden = (
         "Retired category",
         "Old project",
         "Retired activity",
-        "My finished task",
-        "Someone else's",
+        "My open task",  # tasks are not part of prod logs
     )
     for value in hidden:
         assert value not in prompt
@@ -174,11 +162,10 @@ async def test_invalid_and_inactive_ids_are_stripped(
     body = await _draft(
         client,
         fake_ai,
-        task_id=999_999,
         project_id=inactive_project.id,
         category_id=inactive_category.id,
     )
-    assert (body["task_id"], body["project_id"], body["category_id"]) == (None, None, None)
+    assert (body["project_id"], body["category_id"]) == (None, None)
     assert body["missing_fields"] == ["category_id", "project_id", "activity_id"]
 
     body = await _draft(
@@ -193,27 +180,6 @@ async def test_invalid_and_inactive_ids_are_stripped(
     assert (body["project_id"], body["category_id"], body["activity_id"]) == (None, None, None)
     assert body["om_project_id"] is None
     assert body["work_setup_id"] == await _default_work_setup(db)
-
-
-async def test_other_users_task_is_stripped(
-    client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
-) -> None:
-    await login_as(client, db, role=Role.ADMIN)  # admins cannot use others' tasks either
-    foreign = await make_task(db)
-
-    body = await _draft(client, fake_ai, task_id=foreign.id)
-
-    assert body["task_id"] is None
-
-
-async def test_own_completed_task_is_stripped(
-    client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
-) -> None:
-    user = await login_as(client, db)
-    done = await make_status(db, is_done=True)
-    task = await make_task(db, user=user, status_id=done.id)
-
-    assert (await _draft(client, fake_ai, task_id=task.id))["task_id"] is None
 
 
 @pytest.mark.parametrize("hours", [0, -1, 24.01, 25, 1e9])
@@ -239,30 +205,6 @@ async def test_hours_are_rounded_to_hundredths(
     assert (await _draft(client, fake_ai, hours_spent=cap))["hours_spent"] == cap
     assert (await _draft(client, fake_ai, hours_spent=cap + 0.01))["hours_spent"] is None
     assert (await _draft(client, fake_ai, planned_hours=0.555))["planned_hours"] == 0.56
-
-
-async def test_task_prefills_active_project_and_category(
-    client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
-) -> None:
-    user = await login_as(client, db)
-    refs = await make_linked(db)
-    project, category = refs.project, refs.category
-    task = await make_task(db, user=user, project_id=project.id, category_id=category.id)
-    other_category = await make_category(db)
-
-    body = await _draft(client, fake_ai, task_id=task.id)
-    assert (body["project_id"], body["category_id"]) == (project.id, category.id)
-
-    # The model's own valid category wins; the task's project then doesn't fit it.
-    body = await _draft(client, fake_ai, task_id=task.id, category_id=other_category.id)
-    assert (body["category_id"], body["project_id"]) == (other_category.id, None)
-
-    # Inactive values on the task are not copied.
-    category.is_active = False
-    project.is_active = False
-    await db.flush()
-    body = await _draft(client, fake_ai, task_id=task.id)
-    assert (body["project_id"], body["category_id"]) == (None, None)
 
 
 async def test_links_that_do_not_fit_are_stripped(
@@ -311,11 +253,9 @@ async def test_missing_and_malformed_values_are_listed(
 ) -> None:
     await login_as(client, db)
 
-    body = await _draft(
-        client, fake_ai, title="   ", description="", log_date="yesterday", hours_spent=None
-    )
+    body = await _draft(client, fake_ai, description="   ", log_date="yesterday", hours_spent=None)
 
-    assert (body["title"], body["description"], body["log_date"]) == (None, None, None)
+    assert (body["description"], body["log_date"]) == (None, None)
     assert body["missing_fields"] == [
         "log_date",
         "category_id",
@@ -325,14 +265,14 @@ async def test_missing_and_malformed_values_are_listed(
     ]
 
 
-async def test_long_title_is_truncated(
+async def test_long_description_is_truncated(
     client: AsyncClient, db: AsyncSession, fake_ai: FakeProvider
 ) -> None:
     await login_as(client, db)
 
-    body = await _draft(client, fake_ai, title="x" * 250)
+    body = await _draft(client, fake_ai, description="x" * 10_050)
 
-    assert body["title"] == "x" * 200
+    assert body["description"] == "x" * 10_000
 
 
 @pytest.mark.parametrize("text", ["", "   ", "x" * 2001])

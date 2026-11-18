@@ -14,6 +14,8 @@ from app.schemas.prod_logs import (
     CopyLogs,
     CopyResult,
     LogExportQuery,
+    ProdLogBulkCreate,
+    ProdLogBulkResult,
     ProdLogCreate,
     ProdLogListItem,
     ProdLogOut,
@@ -38,20 +40,30 @@ async def list_logs(
 async def create_log(
     data: ProdLogCreate, user: CurrentUser, db: SessionDep, settings: SettingsDep
 ) -> ProdLogOut:
-    """Rejected (422 `daily_hours_exceeded`) if the day would total more than 24 actual
-    or 24 planned hours, and (422 `week_locked`) for planned hours in a locked week."""
+    """Rejected (422 `daily_hours_exceeded`) if the day would total more than
+    WORKDAY_HOURS actual or WORKDAY_HOURS planned hours, and (422 `week_locked`) for
+    planned hours in a locked week."""
     return await service.create_log(db, user, data, settings)
+
+
+@router.post("/bulk", response_model=ProdLogBulkResult, status_code=201)
+async def create_logs(
+    data: ProdLogBulkCreate, user: CurrentUser, db: SessionDep, settings: SettingsDep
+) -> ProdLogBulkResult:
+    """Create several of your rows at once: all or none. Same checks as a single create,
+    with field errors keyed by row index (`rows.2.category_id`)."""
+    return await service.create_logs(db, user, data, settings)
 
 
 @router.post("/copy", response_model=CopyResult)
 async def copy_logs(
     data: CopyLogs, user: CurrentUser, db: SessionDep, settings: SettingsDep
 ) -> CopyResult:
-    """Copy your rows from a day or a week into days of open weeks, as planned rows.
+    """Copy your rows from a week into days of open weeks (by weekday), as planned rows.
 
     Every target date must be in an open week (422 `week_locked`). Days that would pass
-    24 planned hours, and rows with inactive values, are skipped and reported. No source
-    rows: 422 `nothing_to_copy`."""
+    WORKDAY_HOURS planned, and rows with inactive values, are skipped and reported. No
+    source rows: 422 `nothing_to_copy`."""
     return await service.copy_logs(db, user, data, settings)
 
 

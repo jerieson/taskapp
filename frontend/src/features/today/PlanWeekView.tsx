@@ -1,14 +1,11 @@
 /*
  * /today, "Plan week" tab: the planned rows of one week, Monday to Friday (?week=,
- * default next week), with the deadline countdown, "Copy this week's plan" (the week
- * before into this one, by weekday) and "Copy a day" (one day into chosen days).
- * Copies are planned rows; days that would pass 24 planned hours are skipped. A locked
- * week is read-only for planned hours (admins excepted).
+ * default next week), with the deadline countdown and "Copy this week's plan" (the week
+ * before into this one, by weekday; days that would pass the workday are skipped). A
+ * single row is copied to other days with its "Copy" button (the log form, prefilled).
+ * A locked week is read-only for planned hours (admins excepted).
  */
-import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 
 import { useCurrentUser } from '../../api/auth'
 import { errorMessage } from '../../api/client'
@@ -17,16 +14,13 @@ import {
   useDeleteLog,
   useLogsInRange,
   type CopyLogs,
-  type ProdLog,
   type ProdLogItem,
 } from '../../api/logs'
 import { usePlanningStatus, type PlanningStatus } from '../../api/planning'
 import AsyncState from '../../components/AsyncState'
 import ColorDot from '../../components/ColorDot'
 import ConfirmModal from '../../components/ConfirmModal'
-import { InputField, SubmitButton } from '../../components/FormField'
 import {
-  AlertIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
@@ -34,7 +28,6 @@ import {
   PlusIcon,
   TrashIcon,
 } from '../../components/icons'
-import Modal from '../../components/Modal'
 import { SkeletonCard } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
 import {
@@ -42,13 +35,12 @@ import {
   formatDayRange,
   formatDayWithWeekday,
   formatHours,
-  formatShortDay,
   formatWeekday,
   mondayOf,
   shiftDay,
   todayIso,
 } from '../../lib/format'
-import LogFormBody from '../logs/LogForm'
+import LogFormModal, { type LogModalState } from '../logs/LogFormModal'
 import { logHours, logLabel } from '../logs/logText'
 import { copySummary, useWeekOpen } from './planning'
 import { DeadlineCountdown } from './PlanningParts'
@@ -95,11 +87,9 @@ function WeekPlan({
   const weekOpen = useWeekOpen(status)
   const canPlan = weekOpen || isAdmin
 
-  // undefined = closed; {date} = new row on that date; {log} = edit.
-  const [editing, setEditing] = useState<{ date: string; log: ProdLog | null } | undefined>()
+  const [modal, setModal] = useState<LogModalState | null>(null)
   const [deleting, setDeleting] = useState<ProdLogItem | null>(null)
   const [copyingWeek, setCopyingWeek] = useState(false)
-  const [copyingDay, setCopyingDay] = useState(false)
 
   const previousWeek = shiftDay(status.week_start, -7)
   const isThisWeek = previousWeek === mondayOf(todayIso())
@@ -184,10 +174,6 @@ function WeekPlan({
               <CopyIcon className="size-4" />
               {copyWeekLabel}
             </button>
-            <button type="button" className="btn btn-sm" onClick={() => setCopyingDay(true)}>
-              <CopyIcon className="size-4" />
-              Copy a day to the week
-            </button>
           </div>
         )}
       </section>
@@ -203,8 +189,11 @@ function WeekPlan({
                 workday={workday}
                 rows={rowsByDay.get(day.date) ?? []}
                 canPlan={canPlan}
-                onAdd={() => setEditing({ date: day.date, log: null })}
-                onEdit={(log) => setEditing({ date: day.date, log })}
+                onAdd={() =>
+                  setModal({ kind: 'new', date: day.date, title: 'Add planned activity' })
+                }
+                onEdit={(log) => setModal({ kind: 'edit', log })}
+                onCopy={(log) => setModal({ kind: 'copy', log })}
                 onDelete={setDeleting}
               />
             ))}
@@ -212,20 +201,7 @@ function WeekPlan({
         )}
       </AsyncState>
 
-      <Modal
-        open={editing !== undefined}
-        title={editing?.log ? 'Edit row' : 'Add planned activity'}
-        onClose={() => setEditing(undefined)}
-      >
-        {editing && (
-          <LogFormBody
-            log={editing.log}
-            isOwn
-            prefill={{ logDate: editing.date }}
-            onDone={() => setEditing(undefined)}
-          />
-        )}
-      </Modal>
+      <LogFormModal state={modal} onClose={() => setModal(null)} />
 
       <ConfirmModal
         open={copyingWeek}
@@ -247,20 +223,10 @@ function WeekPlan({
           none were planned.
         </p>
         <p className="mt-2 text-sm text-base-content/80">
-          Rows already planned stay. Days that would pass 24 planned hours are skipped.
+          Rows already planned stay. Days that would pass {formatHours(workday)} planned are
+          skipped.
         </p>
       </ConfirmModal>
-
-      <Modal open={copyingDay} title="Copy a day to the week" onClose={() => setCopyingDay(false)}>
-        {copyingDay && (
-          <CopyDayForm
-            days={status.days.map((d) => d.date)}
-            isPending={copy.isPending}
-            onSubmit={(body) => runCopy(body, () => setCopyingDay(false))}
-            onCancel={() => setCopyingDay(false)}
-          />
-        )}
-      </Modal>
 
       <ConfirmModal
         open={deleting !== null}
@@ -289,10 +255,21 @@ interface PlanDayProps {
   canPlan: boolean
   onAdd: () => void
   onEdit: (log: ProdLogItem) => void
+  onCopy: (log: ProdLogItem) => void
   onDelete: (log: ProdLogItem) => void
 }
 
-function PlanDay({ date, planned, workday, rows, canPlan, onAdd, onEdit, onDelete }: PlanDayProps) {
+function PlanDay({
+  date,
+  planned,
+  workday,
+  rows,
+  canPlan,
+  onAdd,
+  onEdit,
+  onCopy,
+  onDelete,
+}: PlanDayProps) {
   return (
     <li className="overflow-hidden rounded-box border border-base-300 bg-base-100">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-base-300 bg-base-200 px-4 py-2">
@@ -329,7 +306,6 @@ function PlanDay({ date, planned, workday, rows, canPlan, onAdd, onEdit, onDelet
                 </p>
                 <p className="text-xs break-words text-base-content/80">
                   {log.project?.name ?? 'No project'} · {log.category.label}
-                  {log.title && ` · ${log.title}`}
                 </p>
               </div>
               <span className="font-semibold tabular-nums">
@@ -350,6 +326,14 @@ function PlanDay({ date, planned, workday, rows, canPlan, onAdd, onEdit, onDelet
                 >
                   <PencilIcon className="size-4" />
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm btn-square"
+                  onClick={() => onCopy(log)}
+                  aria-label={`Copy ${logLabel(log)} to other days`}
+                >
+                  <CopyIcon className="size-4" />
+                </button>
                 {(canPlan || log.planned_hours === null) && (
                   <button
                     type="button"
@@ -366,89 +350,5 @@ function PlanDay({ date, planned, workday, rows, canPlan, onAdd, onEdit, onDelet
         </ul>
       )}
     </li>
-  )
-}
-
-// ---------------------------------------------------------------- copy a day
-
-const copyDaySchema = z.object({
-  from_date: z.string().min(1, 'Choose a day to copy'),
-  to_dates: z.array(z.string()).min(1, 'Choose at least one day'),
-})
-type CopyDayValues = z.infer<typeof copyDaySchema>
-
-function CopyDayForm({
-  days,
-  isPending,
-  onSubmit,
-  onCancel,
-}: {
-  days: string[]
-  isPending: boolean
-  onSubmit: (body: CopyLogs) => void
-  onCancel: () => void
-}) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<CopyDayValues>({
-    resolver: zodResolver(copyDaySchema),
-    defaultValues: { from_date: todayIso(), to_dates: days },
-  })
-
-  return (
-    <form
-      onSubmit={(e) =>
-        void handleSubmit((data) =>
-          onSubmit({
-            from_date: data.from_date,
-            to_dates: data.to_dates.filter((d) => d !== data.from_date),
-          }),
-        )(e)
-      }
-      noValidate
-    >
-      <InputField
-        label="Copy the rows of"
-        type="date"
-        error={errors.from_date?.message}
-        {...register('from_date')}
-      />
-      <fieldset className="fieldset">
-        <legend className="fieldset-legend">To these days</legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {days.map((day) => (
-            <label key={day} className="label min-h-11 cursor-pointer gap-2 text-base-content">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-primary"
-                value={day}
-                {...register('to_dates')}
-              />
-              {formatWeekday(day)} {formatShortDay(day)}
-            </label>
-          ))}
-        </div>
-        {errors.to_dates && (
-          <p className="flex items-center gap-1.5 text-sm text-base-content" role="alert">
-            <span className="inline-flex rounded-full bg-error p-0.5 text-error-content">
-              <AlertIcon className="size-3" />
-            </span>
-            {errors.to_dates.message}
-          </p>
-        )}
-      </fieldset>
-      <p className="mt-2 text-sm text-base-content/80">
-        Rows are added as planned rows: planned hours come from the planned hours, or the actual
-        hours when none were planned. Days that would pass 24 planned hours are skipped.
-      </p>
-      <div className="modal-action">
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
-        </button>
-        <SubmitButton isPending={isPending}>Copy</SubmitButton>
-      </div>
-    </form>
   )
 }
