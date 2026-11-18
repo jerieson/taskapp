@@ -119,7 +119,7 @@ Use current stable versions of everything. Check the latest version at install t
 - Every router endpoint (except login, invite acceptance, password reset acceptance, Google OAuth, health) requires `get_current_user`.
 - Every query on user-owned data is scoped according to the permission matrix below. Write the scoping in services, not routers.
 - Return 404 (not 403) when a user requests a specific resource they are not allowed to see.
-- Dropdown values (categories, activities, activity groups, O&M projects, work set-ups, statuses, priorities, support types, projects) are never hardcoded and never referenced by label in code. Use flags (`is_default`, `is_done`, `requires_om_project`).
+- Dropdown values (categories, activities, activity groups, O&M projects, work set-ups, deviation reasons, statuses, priorities, support types, projects) are never hardcoded and never referenced by label in code. Use flags (`is_default`, `is_done`, `requires_om_project`).
 - Dropdown values are deactivated (`is_active = false`), never deleted. Inactive values are hidden from selection but still display on existing records.
 - Users are never deleted, only deactivated.
 - All LLM output is validated with a Pydantic schema before use. All IDs returned by the LLM are checked against the database and the caller's permissions. AI output is never saved without explicit user confirmation, except `ai_summaries` caching.
@@ -293,7 +293,7 @@ Roles: `admin`, `manager`, `dev`. Global role stored on `users.role`. Each non-a
 | Resource / Action | Admin | Manager | Dev |
 |---|---|---|---|
 | Manage teams, users, roles, invites, password reset links | CRUD | none | none |
-| Manage categories, projects, activity groups, activities, O&M projects, work set-ups, statuses, priorities, support types; import the sheet's Data tab | CRUD | read | read |
+| Manage categories, projects, activity groups, activities, O&M projects, work set-ups, deviation reasons, statuses, priorities, support types; import the sheet's Data tab | CRUD | read | read |
 | Export prod logs (CSV, sheet format) | any user | self + own-team members | self |
 | Next-week planning status | all teams | own team | self |
 | Own tasks | CRUD | CRUD | CRUD |
@@ -348,8 +348,11 @@ activity_group_members          # an activity can be in several groups ("Analysi
 om_projects                     # "Project (For O&M)": "[SFA-App] Collection", ...
   id, label (unique), sort_order, is_active
 
-work_setups                     # Remote, On-Site, Out-of-Office
+work_setups                     # Remote, On-Site (default), Out-of-Office
   id, label (unique), color (nullable), sort_order, is_active, is_default (bool)
+
+deviation_reasons               # "Reason for Deviation": Unplanned Leaves, Scope Creep, ...
+  id, label (unique), sort_order, is_active
 
 support_types                   # Concern, Inquiry, Bug, Request, Data Modification, Transport
   id, label (unique), color (nullable), sort_order, is_active
@@ -381,11 +384,11 @@ prod_logs
   activity_id (required), title (nullable, short note), description (nullable, "Remarks"),
   project_id (nullable in DB, required by the service for new rows), category_id (required),
   om_project_id (nullable FK om_projects),
-  is_planned (bool)              # Planned vs Unplanned; set by the server from the deadline
+  is_planned (bool)              # Planned vs Unplanned; chosen by the user, default Planned
   planned_hours NUMERIC(4,2) (nullable) CHECK (> 0 AND <= 24),
   hours_spent NUMERIC(4,2) (nullable, "Actual Hours") CHECK (> 0 AND <= 24),
   CHECK (planned_hours IS NOT NULL OR hours_spent IS NOT NULL),
-  deviation_reason (nullable),
+  deviation_reason_id (nullable FK deviation_reasons),
   created_at, updated_at, updated_by (FK users)
 
 support_entries
@@ -409,13 +412,14 @@ ai_requests
 - **Prod logs hold no status or priority.** Those belong to tasks. A log stores its own `project_id` and `category_id`; when a task is selected they are pre-filled from the task and remain editable. The values on the log are what dashboards report.
 - **Linked dropdowns:** a log's project must be linked to its category (`project_categories`); its activity must be in the project's activity group; `om_project_id` is allowed only when the category has `requires_om_project` (optional even then). Inactive values follow the usual rule (kept on existing rows, not newly chosen).
 - **Planning deadline:** the plan for a week (Monday to Friday) is due at `PLAN_DEADLINE_TIME` (default 18:30) on the Friday before, in `APP_TIMEZONE`. A week is *open* before its deadline and *locked* after it.
-- **Planned and actual:** `is_planned` is set by the server when the row is created: true if created while the row's week is open, false otherwise (unplanned). Users cannot change it; the admin can. `planned_hours` can be set, changed or cleared, and planned rows deleted, only while the week is open (admin excepted). Unplanned rows have actual hours and no planned hours. Actual `hours_spent`, `deviation_reason` and remarks can be edited at any time. Dashboards report **actual** hours (`hours_spent`); rows without actual hours are excluded. `deviation_reason` is offered when actual differs from planned.
+- **Planned and actual:** `is_planned` (Planned/Unplanned) is chosen by the user on the row, default Planned, and can be changed at any time. `planned_hours` can be set, changed or cleared, and rows holding planned hours deleted, only while the week is open (admin excepted). Actual `hours_spent`, Planned/Unplanned, the deviation reason and remarks can be edited at any time. Dashboards report **actual** hours (`hours_spent`); rows without actual hours are excluded. The deviation reason is an optional dropdown (blank by default), hinted when actual differs from planned.
 - **Reminder and status:** from Friday 00:00 until the deadline, users with no planned rows for next week see a reminder. Managers (own team) and the admin see each member's planned hours per day for next week and whether they have planned.
-- **Work set-up:** new rows default to the `is_default` work set-up (same single-default rule as statuses).
+- **Work set-up:** new rows default to the `is_default` work set-up (same single-default rule as statuses); On-Site is the seeded default.
+- **Categories:** the sheet's four: Major Enhancements, Minor Enhancements, Operations & Maintenance (offers Project (For O&M)) and Others. The seed creates them; the Data tab import links their projects.
 - **Team snapshot:** `prod_logs.team_id` is set from the author's `team_id` at creation and never changes afterwards. Manager access and team dashboards filter on this column.
-- **Daily hours:** the service rejects a log if the user's total `hours_spent` for that `log_date` would exceed 24, and separately if the total `planned_hours` would exceed 24. Planned totals above `WORKDAY_HOURS` are allowed but shown as a warning.
+- **Daily hours:** the service rejects a log if the user's total `hours_spent` for that `log_date` would exceed `WORKDAY_HOURS`, and separately if the total `planned_hours` would exceed it (so one row can't exceed it either). The database still checks 0 < hours <= 24 per row.
 - **Audit:** `prod_logs.updated_by` is set on every create and update. The UI shows "edited by {admin}" when `updated_by != user_id`.
-- **Copy a plan:** a user can copy their rows from one day (or one week) to days in an open week as planned rows (planned hours = source planned, else actual; actual empty), skipping days that would exceed the planned 24-hour cap and inactive values.
+- **Copy a plan:** a user can copy their rows from one day (or one week) to days in an open week as planned rows (planned hours = source planned, else actual; actual empty), skipping days that would exceed the planned daily cap (`WORKDAY_HOURS`) and inactive values.
 - **Export:** CSV with the sheet's columns in order: Date (`d-Mon-YYYY`), Work Set-Up, Planned Hours, Actual Hours Consumed, Planned (`Planned`/`Unplanned`), Category, Project, Activity/Task, Project (For O&M), Reason for Deviation, Remarks, Date Created. Hours with 2 decimals. One person per file, sorted by date then creation.
 - **Data tab import:** the admin uploads the sheet's Data tab CSV. Columns named after a category list that category's projects; `<Category>_<Project>` columns are an activity group for that project; `Project_Activity` is the group for projects under the enhancement categories; `OM_Reflected_Activity` / `OM_Not_Reflected_Activity` map to the two maintenance projects; `Operations & Maintenance_Project` fills `om_projects`. Import is idempotent (matches by label, case-insensitive), never deletes, and reports what it created and linked. The exact mapping is confirmed in the phase that builds it.
 - **Support dictionary:** shared by everyone. Search matches concern, cause, resolution, notes, project, module and sub-module (case-insensitive). The author or an admin edits or deactivates an entry; deactivated entries are hidden by default and shown with a filter. The admin can import entries from the team's CSV (columns: author, Type, Project, Module, Sub-module, Concern, Cause, Resolution, Query, Notes, Date Inputted).

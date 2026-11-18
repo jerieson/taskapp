@@ -100,6 +100,14 @@ class OmProject(_PlainLookupMixin, Base):
     label: Mapped[str] = mapped_column(String(100), unique=True)
 
 
+class DeviationReason(_PlainLookupMixin, Base):
+    """Values of "Reason for Deviation" (optional on a log row)."""
+
+    __tablename__ = "deviation_reasons"
+
+    label: Mapped[str] = mapped_column(String(100), unique=True)
+
+
 class ActivityGroupMember(Base):
     __tablename__ = "activity_group_members"
 

@@ -32,6 +32,7 @@ import { SkeletonForm } from '../../components/Skeleton'
 import { useToast } from '../../components/toast-context'
 import { formatDay } from '../../lib/format'
 import { memberNote } from '../../lib/labels'
+import ExportLogs from './ExportLogs'
 import LogFormBody from './LogForm'
 import LogList, { LogListSkeleton } from './LogList'
 import { logHours, logLabel } from './logText'
@@ -241,7 +242,11 @@ function TeamLogs({ teamId, description, selector, editorId }: TeamLogsProps) {
 
   return (
     <>
-      <PageHeader title="Team logs" description={description} />
+      <PageHeader
+        title="Team logs"
+        description={description}
+        actions={teamId !== undefined && <ExportLogs teamId={teamId} memberId={filters.member} />}
+      />
       {selector}
 
       {teamId !== undefined && (

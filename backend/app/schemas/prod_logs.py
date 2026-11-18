@@ -10,7 +10,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PlainSerializer,
-    StringConstraints,
     model_validator,
 )
 
@@ -24,8 +23,6 @@ Hours = Annotated[
     Field(gt=0, le=MAX_DAILY_HOURS, max_digits=4, decimal_places=2, examples=[1.5]),
 ]
 """Hours on one log: more than 0, at most 24, in steps of 0.01."""
-
-DeviationReason = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 
 # Hours are NUMERIC in the database; send them to clients as plain JSON numbers.
 HoursOut = Annotated[Decimal, PlainSerializer(float, return_type=float)]
@@ -111,7 +108,8 @@ class ProdLogOut(BaseModel):
     """A short note."""
     description: str | None
     """Remarks."""
-    deviation_reason: str | None
+    deviation_reason: PlainRef | None
+    """"Reason for Deviation (if any)"."""
     updated_by: UserRef
     """Last person to create or change the log. Differs from `user` after an admin edit."""
     created_at: datetime
@@ -142,9 +140,10 @@ class TeamMemberOut(BaseModel):
 class ProdLogCreate(BaseModel):
     """A row needs planned hours, actual hours, or both.
 
-    Planned/unplanned is set by the server: a row is planned when its week is still
-    open (before the Friday deadline). In a locked week only an admin can enter planned
-    hours (422 `week_locked`). Only an admin can send `is_planned` to override it.
+    Rows are Planned unless `is_planned` is false. In a locked week (after the Friday
+    deadline) only an admin can enter planned hours (422 `week_locked`). The author's
+    planned hours on one date may total at most WORKDAY_HOURS, and separately their
+    actual hours (422 `daily_hours_exceeded`).
 
     The linked dropdowns must fit together: the project is linked to the category, the
     activity is in the project's activity group, and an O&M project is only allowed when
@@ -166,9 +165,9 @@ class ProdLogCreate(BaseModel):
     task_id: int | None = None
     title: Title | None = None
     description: Description | None = None
-    deviation_reason: DeviationReason | None = None
-    is_planned: bool | None = None
-    """Admin only. Omitted: set from the planning deadline."""
+    deviation_reason_id: int | None = None
+    is_planned: bool = True
+    """Planned (default) or Unplanned."""
 
 
 class ProdLogUpdate(BaseModel):
@@ -178,7 +177,8 @@ class ProdLogUpdate(BaseModel):
     kept but not newly chosen. The row must keep planned hours, actual hours, or both.
     Planned hours cannot be set, changed or cleared on a date in a locked week (also by
     moving the row to or from such a date), except by an admin (422 `week_locked`).
-    Actual hours, remarks and the reason for deviation can change at any time.
+    Actual hours, Planned/Unplanned, remarks and the reason for deviation can change at
+    any time.
     """
 
     log_date: date | None = None
@@ -192,9 +192,9 @@ class ProdLogUpdate(BaseModel):
     task_id: int | None = None
     title: Title | None = None
     description: Description | None = None
-    deviation_reason: DeviationReason | None = None
+    deviation_reason_id: int | None = None
     is_planned: bool | None = None
-    """Admin only."""
+    """Planned or Unplanned."""
 
     @model_validator(mode="after")
     def _required_not_null(self) -> Self:
@@ -263,3 +263,30 @@ class CopyResult(BaseModel):
     skipped_rows: int
     """Source rows left out because a value on them is inactive or no longer linked
     (or they have no project)."""
+
+
+# ---------------------------------------------------------------- export
+
+MAX_EXPORT_DAYS = 366
+
+
+class LogExportQuery(BaseModel):
+    """One person's logs as CSV in the sheet's column order."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date_from: date
+    """First day (inclusive)."""
+    date_to: date
+    """Last day (inclusive). At most 366 days after `date_from`."""
+    user_id: int | None = None
+    """Whose logs. Omitted: the caller's own. Managers: members of their team (rows
+    written under the team); admins: anyone."""
+
+    @model_validator(mode="after")
+    def _range(self) -> Self:
+        if self.date_from > self.date_to:
+            raise ValueError("date_from must not be after date_to")
+        if (self.date_to - self.date_from).days >= MAX_EXPORT_DAYS:
+            raise ValueError(f"The range can be at most {MAX_EXPORT_DAYS} days")
+        return self

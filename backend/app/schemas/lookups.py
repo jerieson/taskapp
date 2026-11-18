@@ -1,9 +1,17 @@
 """Dropdown values, projects, the log form's options and the Data tab import."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    StringConstraints,
+)
 
 from app.core.pagination import PaginationParams
 
@@ -56,6 +64,10 @@ class OmProjectOut(PlainLookupOut):
     pass
 
 
+class DeviationReasonOut(PlainLookupOut):
+    pass
+
+
 class ActivityGroupOut(PlainLookupOut):
     activity_ids: list[int]
     """Member activities (active and inactive) in display order."""
@@ -105,6 +117,12 @@ class PlainLookupCreate(BaseModel):
     label: Label
 
 
+class LongPlainLookupCreate(BaseModel):
+    """A colorless value with a long label (reasons for deviation)."""
+
+    label: LongLabel
+
+
 class OmProjectCreate(BaseModel):
     label: LongLabel
 
@@ -133,6 +151,10 @@ class LongLookupUpdate(BaseModel):
 
 class PlainLookupUpdate(BaseModel):
     label: Label | None = None
+
+
+class LongPlainLookupUpdate(BaseModel):
+    label: LongLabel | None = None
 
 
 class OmProjectUpdate(BaseModel):
@@ -199,12 +221,17 @@ class LogOptionGroup(BaseModel):
 class LogOptionsOut(BaseModel):
     """Every active value the log form needs, in display order."""
 
+    workday_hours: Annotated[Decimal, PlainSerializer(float, return_type=float)]
+    """WORKDAY_HOURS: the most planned hours, and separately actual hours, one person
+    can log on one date."""
+
     categories: list[CategoryOut]
     projects: list[LogOptionProject]
     activity_groups: list[LogOptionGroup]
     activities: list[ActivityOut]
     om_projects: list[OmProjectOut]
     work_setups: list[WorkSetupOut]
+    deviation_reasons: list[DeviationReasonOut]
 
 
 # ---------------------------------------------------------------- Data tab import

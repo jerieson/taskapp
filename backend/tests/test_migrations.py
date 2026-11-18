@@ -99,3 +99,68 @@ def test_log_fields_backfill_and_downgrade() -> None:
                 "DELETE FROM activities WHERE label = 'General'",
             ]
         )
+
+
+# ---------------------------------------------------------------- deviation reasons
+
+BEFORE_DEVIATION_REASONS = "8f4facd661a4"
+
+
+def test_deviation_reasons_conversion_and_downgrade() -> None:
+    config = alembic_config()
+    command.downgrade(config, BEFORE_DEVIATION_REASONS)
+    try:
+        insert_row = (
+            "INSERT INTO prod_logs (user_id, log_date, category_id, activity_id, work_setup_id, "
+            "hours_spent, description, deviation_reason, updated_by) "
+            "SELECT u.id, '2026-11-02', c.id, a.id, w.id, 1, {description}, {reason}, u.id "
+            "FROM users u, categories c, activities a, work_setups w "
+            "WHERE u.username = 'reason_user' AND c.label = 'Reason category' "
+            "AND a.label = 'Reason activity' AND w.is_default"
+        )
+        _sql(
+            [
+                "INSERT INTO users (username, email, password_hash, role) "
+                "VALUES ('reason_user', 'reason@example.com', '!x', 'admin')",
+                "INSERT INTO categories (label) VALUES ('Reason category')",
+                "INSERT INTO activities (label) VALUES ('Reason activity')",
+                insert_row.format(description="NULL", reason="' scope creep '"),
+                insert_row.format(description="'Note'", reason="'Extra fixes'"),
+            ]
+        )
+        command.upgrade(config, "head")
+
+        fetch = (
+            "SELECT d.label, l.description FROM prod_logs l "
+            "JOIN users u ON u.id = l.user_id "
+            "LEFT JOIN deviation_reasons d ON d.id = l.deviation_reason_id "
+            "WHERE u.username = 'reason_user' ORDER BY l.id"
+        )
+        assert [tuple(r) for r in _sql([], fetch)] == [
+            ("Scope Creep", None),
+            (None, "Note\nReason for deviation: Extra fixes"),
+        ]
+        default = "SELECT label FROM work_setups WHERE is_default"
+        assert [r[0] for r in _sql([], default)] == ["On-Site"]
+        reasons = _sql([], "SELECT count(*) FROM deviation_reasons WHERE is_active")
+        assert reasons[0][0] == 11
+
+        command.downgrade(config, BEFORE_DEVIATION_REASONS)
+        rows = _sql(
+            [],
+            "SELECT deviation_reason FROM prod_logs l JOIN users u ON u.id = l.user_id "
+            "WHERE u.username = 'reason_user' ORDER BY l.id",
+        )
+        assert [r[0] for r in rows] == ["Scope Creep", None]
+        assert [r[0] for r in _sql([], default)] == ["Remote"]
+    finally:
+        command.upgrade(config, "head")
+        _sql(
+            [
+                "DELETE FROM prod_logs WHERE user_id IN "
+                "(SELECT id FROM users WHERE username = 'reason_user')",
+                "DELETE FROM users WHERE username = 'reason_user'",
+                "DELETE FROM categories WHERE label = 'Reason category'",
+                "DELETE FROM activities WHERE label = 'Reason activity'",
+            ]
+        )

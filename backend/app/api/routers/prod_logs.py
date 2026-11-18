@@ -2,8 +2,9 @@
 change and delete anyone's log; managers can read their team's logs (team snapshot)."""
 
 from typing import Annotated
+from urllib.parse import quote
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 
 from app.core.config import SettingsDep
 from app.core.dependencies import CurrentUser
@@ -12,12 +13,14 @@ from app.db.session import SessionDep
 from app.schemas.prod_logs import (
     CopyLogs,
     CopyResult,
+    LogExportQuery,
     ProdLogCreate,
     ProdLogListItem,
     ProdLogOut,
     ProdLogQuery,
     ProdLogUpdate,
 )
+from app.services import log_export
 from app.services import prod_logs as service
 
 router = APIRouter(prefix="/logs", tags=["prod logs"])
@@ -50,6 +53,30 @@ async def copy_logs(
     24 planned hours, and rows with inactive values, are skipped and reported. No source
     rows: 422 `nothing_to_copy`."""
     return await service.copy_logs(db, user, data, settings)
+
+
+@router.get(
+    "/export",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "CSV file"}},
+)
+async def export_logs(
+    params: Annotated[LogExportQuery, Query()],
+    user: CurrentUser,
+    db: SessionDep,
+    settings: SettingsDep,
+) -> Response:
+    """One person's logs as a CSV attachment in the team sheet's column order.
+
+    Own logs for everyone; managers: a member's rows written under their team; admins:
+    anyone. Other users: 404."""
+    filename, content = await log_export.export_csv(db, user, params, settings)
+    disposition = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"
+    return Response(
+        content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": disposition},
+    )
 
 
 @router.get("/{log_id}", response_model=ProdLogOut)

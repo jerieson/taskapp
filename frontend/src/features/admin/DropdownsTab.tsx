@@ -95,6 +95,14 @@ const LISTS = [
     maxLength: 100,
     hint: 'Offered as Project (For O&M) on rows whose category has “Has O&M project”.',
   },
+  {
+    kind: 'deviation-reasons',
+    label: 'Deviation reasons',
+    singular: 'reason for deviation',
+    hasColor: false,
+    maxLength: 100,
+    hint: 'Offered as Reason for deviation on log rows (optional).',
+  },
 ] as const satisfies readonly {
   kind: LookupKind
   label: string

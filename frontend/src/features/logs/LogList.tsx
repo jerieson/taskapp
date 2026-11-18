@@ -136,7 +136,7 @@ function LogRow({
         )}
         {log.deviation_reason && (
           <p className="mt-1 text-sm break-words whitespace-pre-line">
-            <span className="font-medium">Deviation:</span> {log.deviation_reason}
+            <span className="font-medium">Deviation:</span> {log.deviation_reason.label}
           </p>
         )}
         <p className="mt-1.5 flex flex-wrap gap-1.5">

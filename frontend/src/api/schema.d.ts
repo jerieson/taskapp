@@ -556,7 +556,8 @@ export interface paths {
         /**
          * Get Log Options
          * @description Active categories, projects (with category links and activity group), activity
-         *     groups (with their active activity ids), activities, O&M projects and work set-ups.
+         *     groups (with their active activity ids), activities, O&M projects, work set-ups and
+         *     reasons for deviation, plus the daily hours cap.
          */
         get: operations["get_log_options_api_log_options_get"];
         put?: never;
@@ -653,6 +654,29 @@ export interface paths {
          *     rows: 422 `nothing_to_copy`.
          */
         post: operations["copy_logs_api_logs_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Logs
+         * @description One person's logs as a CSV attachment in the team sheet's column order.
+         *
+         *     Own logs for everyone; managers: a member's rows written under their team; admins:
+         *     anyone. Other users: 404.
+         */
+        get: operations["export_logs_api_logs_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1962,6 +1986,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/deviation-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Deviation Reasons */
+        get: operations["list_deviation_reasons_api_deviation_reasons_get"];
+        put?: never;
+        /** Create Deviation Reason */
+        post: operations["create_deviation_reason_api_deviation_reasons_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deviation-reasons/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Deviation Reasons */
+        put: operations["reorder_deviation_reasons_api_deviation_reasons_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deviation-reasons/{reason_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Deviation Reason */
+        patch: operations["update_deviation_reason_api_deviation_reasons__reason_id__patch"];
+        trace?: never;
+    };
+    "/api/deviation-reasons/{reason_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Deviation Reason */
+        post: operations["activate_deviation_reason_api_deviation_reasons__reason_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deviation-reasons/{reason_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Deviation Reason */
+        post: operations["deactivate_deviation_reason_api_deviation_reasons__reason_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2191,6 +2301,17 @@ export interface components {
             hours: number;
             /** Planned Hours */
             planned_hours: number;
+        };
+        /** DeviationReasonOut */
+        DeviationReasonOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Is Active */
+            is_active: boolean;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -2528,6 +2649,8 @@ export interface components {
          * @description Every active value the log form needs, in display order.
          */
         LogOptionsOut: {
+            /** Workday Hours */
+            workday_hours: number;
             /** Categories */
             categories: components["schemas"]["CategoryOut"][];
             /** Projects */
@@ -2540,6 +2663,8 @@ export interface components {
             om_projects: components["schemas"]["OmProjectOut"][];
             /** Work Setups */
             work_setups: components["schemas"]["WorkSetupOut"][];
+            /** Deviation Reasons */
+            deviation_reasons: components["schemas"]["DeviationReasonOut"][];
         };
         /** LoginIn */
         LoginIn: {
@@ -2564,6 +2689,19 @@ export interface components {
             label?: string | null;
             /** Color */
             color?: string | null;
+        };
+        /**
+         * LongPlainLookupCreate
+         * @description A colorless value with a long label (reasons for deviation).
+         */
+        LongPlainLookupCreate: {
+            /** Label */
+            label: string;
+        };
+        /** LongPlainLookupUpdate */
+        LongPlainLookupUpdate: {
+            /** Label */
+            label?: string | null;
         };
         /** LookupCreate */
         LookupCreate: {
@@ -2727,6 +2865,17 @@ export interface components {
         Page_CategoryOut_: {
             /** Items */
             items: components["schemas"]["CategoryOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[DeviationReasonOut] */
+        Page_DeviationReasonOut_: {
+            /** Items */
+            items: components["schemas"]["DeviationReasonOut"][];
             /** Total */
             total: number;
             /** Limit */
@@ -3097,9 +3246,10 @@ export interface components {
          * ProdLogCreate
          * @description A row needs planned hours, actual hours, or both.
          *
-         *     Planned/unplanned is set by the server: a row is planned when its week is still
-         *     open (before the Friday deadline). In a locked week only an admin can enter planned
-         *     hours (422 `week_locked`). Only an admin can send `is_planned` to override it.
+         *     Rows are Planned unless `is_planned` is false. In a locked week (after the Friday
+         *     deadline) only an admin can enter planned hours (422 `week_locked`). The author's
+         *     planned hours on one date may total at most WORKDAY_HOURS, and separately their
+         *     actual hours (422 `daily_hours_exceeded`).
          *
          *     The linked dropdowns must fit together: the project is linked to the category, the
          *     activity is in the project's activity group, and an O&M project is only allowed when
@@ -3133,10 +3283,13 @@ export interface components {
             title?: string | null;
             /** Description */
             description?: string | null;
-            /** Deviation Reason */
-            deviation_reason?: string | null;
-            /** Is Planned */
-            is_planned?: boolean | null;
+            /** Deviation Reason Id */
+            deviation_reason_id?: number | null;
+            /**
+             * Is Planned
+             * @default true
+             */
+            is_planned: boolean;
         };
         /** ProdLogListItem */
         ProdLogListItem: {
@@ -3168,8 +3321,7 @@ export interface components {
             title: string | null;
             /** Description */
             description: string | null;
-            /** Deviation Reason */
-            deviation_reason: string | null;
+            deviation_reason: components["schemas"]["PlainRef"] | null;
             updated_by: components["schemas"]["UserRef"];
             /**
              * Created At
@@ -3216,8 +3368,7 @@ export interface components {
             title: string | null;
             /** Description */
             description: string | null;
-            /** Deviation Reason */
-            deviation_reason: string | null;
+            deviation_reason: components["schemas"]["PlainRef"] | null;
             updated_by: components["schemas"]["UserRef"];
             /**
              * Created At
@@ -3238,7 +3389,8 @@ export interface components {
          *     kept but not newly chosen. The row must keep planned hours, actual hours, or both.
          *     Planned hours cannot be set, changed or cleared on a date in a locked week (also by
          *     moving the row to or from such a date), except by an admin (422 `week_locked`).
-         *     Actual hours, remarks and the reason for deviation can change at any time.
+         *     Actual hours, Planned/Unplanned, remarks and the reason for deviation can change at
+         *     any time.
          */
         ProdLogUpdate: {
             /** Log Date */
@@ -3263,8 +3415,8 @@ export interface components {
             title?: string | null;
             /** Description */
             description?: string | null;
-            /** Deviation Reason */
-            deviation_reason?: string | null;
+            /** Deviation Reason Id */
+            deviation_reason_id?: number | null;
             /** Is Planned */
             is_planned?: boolean | null;
         };
@@ -5490,6 +5642,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CopyResult"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    export_logs_api_logs_export_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+                user_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Client error */
@@ -8979,6 +9173,254 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OmProjectOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_deviation_reasons_api_deviation_reasons_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_DeviationReasonOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_deviation_reason_api_deviation_reasons_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LongPlainLookupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviationReasonOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_deviation_reasons_api_deviation_reasons_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_deviation_reason_api_deviation_reasons__reason_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reason_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LongPlainLookupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviationReasonOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_deviation_reason_api_deviation_reasons__reason_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reason_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviationReasonOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_deviation_reason_api_deviation_reasons__reason_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reason_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviationReasonOut"];
                 };
             };
             /** @description Client error */

@@ -17,6 +17,7 @@ from tests.factories import (
     make_activity,
     make_activity_group,
     make_category,
+    make_deviation_reason,
     make_linked,
     make_log,
     make_om_project,
@@ -34,6 +35,12 @@ def _week_open(set_now: Callable[[datetime], None]) -> None:
     """Planned hours are only accepted in open weeks: put the clock two weeks back."""
     monday_before = TODAY - timedelta(days=TODAY.weekday() + 14)
     set_now(datetime.combine(monday_before, time(12), tzinfo=UTC))
+
+
+@pytest.fixture(autouse=True)
+def _daily_cap(settings_override: Callable[..., object]) -> None:
+    """Daily totals are capped at WORKDAY_HOURS; pin it so the numbers below hold."""
+    settings_override(workday_hours=Decimal(9))
 
 
 def _body(refs: LinkedRefs, **kw: object) -> dict[str, object]:
@@ -60,6 +67,7 @@ async def test_create_with_all_fields(client: AsyncClient, db: AsyncSession) -> 
     refs = await make_linked(db, requires_om_project=True)
     om = await make_om_project(db)
     setup = await make_work_setup(db)
+    reason = await make_deviation_reason(db)
     body = await _create(
         client,
         _body(
@@ -70,14 +78,14 @@ async def test_create_with_all_fields(client: AsyncClient, db: AsyncSession) -> 
             om_project_id=om.id,
             title="UAT round 2",
             description="With the client",
-            deviation_reason="Extra fixes",
+            deviation_reason_id=reason.id,
         ),
     )
     assert body["work_setup"]["id"] == setup.id  # type: ignore[index]
     assert body["activity"]["id"] == refs.activity.id  # type: ignore[index]
     assert body["om_project"] == {"id": om.id, "label": om.label, "is_active": True}
     assert (body["planned_hours"], body["hours_spent"], body["is_planned"]) == (3.5, 4, True)
-    assert body["deviation_reason"] == "Extra fixes"
+    assert body["deviation_reason"] == {"id": reason.id, "label": reason.label, "is_active": True}
 
 
 async def test_minimal_row_gets_default_work_setup_and_no_title(
@@ -124,8 +132,8 @@ async def test_hours_required(client: AsyncClient, db: AsyncSession) -> None:
     assert resp.json()["error"]["code"] == "hours_required"
     resp = await client.patch(f"/api/logs/{log.id}", json={"hours_spent": None, "planned_hours": 2})
     assert resp.status_code == 200, resp.text
-    # Planned/unplanned is set when the row is created and does not follow the hours.
-    assert resp.json()["is_planned"] is False
+    # Planned/Unplanned does not follow the hours.
+    assert resp.json()["is_planned"] is True
 
 
 async def test_planned_hours_validation(client: AsyncClient, db: AsyncSession) -> None:
@@ -281,7 +289,7 @@ async def test_update_keeps_unchanged_pairs_after_links_change(
 async def test_actual_and_planned_caps_are_separate(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
     refs = await make_linked(db)
-    await make_log(db, user=me, hours_spent=Decimal("20"), planned_hours=Decimal("20"))
+    await make_log(db, user=me, hours_spent=Decimal("5"), planned_hours=Decimal("5"))
     await make_log(db, user=me, hours_spent=None, planned_hours=Decimal("4"))
 
     # 4 more actual is fine (planned-only rows don't count toward actual) ...
@@ -296,12 +304,12 @@ async def test_actual_and_planned_caps_are_separate(client: AsyncClient, db: Asy
     assert resp.json()["error"]["fields"].keys() == {"hours_spent"}
     # Other days are separate.
     yesterday = (TODAY - timedelta(days=1)).isoformat()
-    await _create(client, _body(refs, log_date=yesterday, planned_hours=24, hours_spent=24))
+    await _create(client, _body(refs, log_date=yesterday, planned_hours=9, hours_spent=9))
 
 
 async def test_planned_cap_on_update(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
-    await make_log(db, user=me, hours_spent=None, planned_hours=Decimal("20"))
+    await make_log(db, user=me, hours_spent=None, planned_hours=Decimal("5"))
     log = await make_log(db, user=me, hours_spent=Decimal("1"), planned_hours=Decimal("4"))
     # Its own planned hours are not double-counted; actual edits don't check planned.
     assert (await client.patch(f"/api/logs/{log.id}", json={"hours_spent": 5})).status_code == 200

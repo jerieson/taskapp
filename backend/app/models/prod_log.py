@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Identity, Index, String, Text, false
+from sqlalchemy import CheckConstraint, ForeignKey, Identity, Index, String, Text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -50,9 +50,12 @@ class ProdLog(TimestampMixin, Base):
     om_project_id: Mapped[int | None] = mapped_column(
         ForeignKey("om_projects.id", ondelete="RESTRICT"), index=True
     )
-    is_planned: Mapped[bool] = mapped_column(server_default=false())
+    is_planned: Mapped[bool] = mapped_column(server_default=true())
     planned_hours: Mapped[Decimal | None]
     # "Actual Hours Consumed".
     hours_spent: Mapped[Decimal | None]
-    deviation_reason: Mapped[str | None] = mapped_column(Text)
+    # "Reason for Deviation (if any)".
+    deviation_reason_id: Mapped[int | None] = mapped_column(
+        ForeignKey("deviation_reasons.id", ondelete="RESTRICT"), index=True
+    )
     updated_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)

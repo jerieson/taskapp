@@ -1,7 +1,8 @@
 /*
  * Create / edit form for a prod log row, rendered inside a Modal. Fields follow the
- * team's sheet: Date, Work set-up, Planned hours, Actual hours, Category, Project,
- * Activity, Project (For O&M), then Task, Note, Remarks and Reason for deviation.
+ * team's sheet: Date, Work set-up, Planned hours, Actual hours, Planned/Unplanned,
+ * Category, Project, Activity, Project (For O&M), then Task, Note, Reason for deviation
+ * and Remarks. Planned and actual hours per day are each capped at WORKDAY_HOURS.
  *
  * The dropdowns are linked (see linkedOptions.ts): changing the category clears a
  * project that is not under it, changing the project clears an activity it does not
@@ -15,7 +16,7 @@
  * filled in.
  *
  * Weekly planning: in a locked week (after the Friday deadline) planned hours are read
- * only, except for admins. Admins can also override Planned/Unplanned.
+ * only, except for admins. Rows are Planned unless the user picks Unplanned.
  * Only the author can link a task: tasks are private, so an admin editing someone
  * else's log keeps the existing link and does not see the task list.
  */
@@ -41,25 +42,27 @@ import { applyFieldErrors } from '../../lib/forms'
 import { buildLinked, withCurrent, type Choice, type Linked } from './linkedOptions'
 
 const HOURS_PATTERN = /^\d{1,2}(\.\d{1,2})?$/
-const HOURS_MESSAGE = 'Enter between 0.01 and 24 hours (up to 2 decimals)'
 const NEED_HOURS = 'Enter planned hours, actual hours, or both'
 
-const hoursField = z
-  .string()
-  .trim()
-  .refine(
-    (v) => v === '' || (HOURS_PATTERN.test(v) && Number(v) > 0 && Number(v) <= 24),
-    HOURS_MESSAGE,
-  )
+/** Hours on one row: more than 0, at most the daily cap, up to 2 decimals. */
+function hoursField(max: number) {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === '' || (HOURS_PATTERN.test(v) && Number(v) > 0 && Number(v) <= max),
+      `Enter between 0.01 and ${max} hours (up to 2 decimals)`,
+    )
+}
 
 // Mirrors app/schemas/prod_logs.py. Select values are id strings ("" = none).
-function makeSchema(requireProject: boolean) {
+function makeSchema(requireProject: boolean, maxHours: number) {
   return z
     .object({
       log_date: z.string().min(1, 'Choose a date'),
       work_setup_id: z.string().min(1, 'Choose a work set-up'),
-      planned_hours: hoursField,
-      hours_spent: hoursField,
+      planned_hours: hoursField(maxHours),
+      hours_spent: hoursField(maxHours),
       category_id: z.string().min(1, 'Choose a category'),
       project_id: z.string(),
       activity_id: z.string().min(1, 'Choose an activity'),
@@ -67,9 +70,8 @@ function makeSchema(requireProject: boolean) {
       task_id: z.string(),
       title: z.string().trim().max(200, 'Use at most 200 characters'),
       description: z.string().trim().max(10000, 'Use at most 10000 characters'),
-      deviation_reason: z.string().trim().max(2000, 'Use at most 2000 characters'),
-      /** Admin only: "" = automatic (new rows) / unchanged. */
-      is_planned: z.enum(['', 'planned', 'unplanned']),
+      deviation_reason_id: z.string(),
+      is_planned: z.enum(['planned', 'unplanned']),
     })
     .superRefine((data, ctx) => {
       if (!data.planned_hours && !data.hours_spent) {
@@ -94,7 +96,7 @@ const FIELDS = [
   'task_id',
   'title',
   'description',
-  'deviation_reason',
+  'deviation_reason_id',
   'is_planned',
 ] as const
 
@@ -149,9 +151,9 @@ function defaultValues(
     om_project_id: '',
     title: '',
     description: '',
-    deviation_reason: '',
+    deviation_reason_id: '',
     planned_hours: '',
-    is_planned: '' as const,
+    is_planned: 'planned' as const,
   }
   if (draft) {
     // The backend only returns active values that fit the linked rules.
@@ -183,7 +185,7 @@ function defaultValues(
       task_id: asString(log.task_id),
       title: log.title ?? '',
       description: log.description ?? '',
-      deviation_reason: log.deviation_reason ?? '',
+      deviation_reason_id: asString(log.deviation_reason?.id),
       is_planned: log.is_planned ? 'planned' : 'unplanned',
     }
   }
@@ -238,7 +240,7 @@ function LogFormInner({
     control,
     formState: { errors },
   } = useForm<LogForm>({
-    resolver: zodResolver(makeSchema(requireProject)),
+    resolver: zodResolver(makeSchema(requireProject, options.workday_hours)),
     defaultValues: defaultValues(linked, log, prefill, draft),
   })
   const values = useWatch({ control })
@@ -290,6 +292,7 @@ function LogFormInner({
   const omProjects = omChoices(category)
   const workSetups = withCurrent(options.work_setups, log?.work_setup)
   const categories = withCurrent(options.categories, log?.category)
+  const reasons = withCurrent(options.deviation_reasons, log?.deviation_reason)
 
   // ------------------------------------------------------------ planning lock
 
@@ -306,7 +309,7 @@ function LogFormInner({
   const planned = values.planned_hours?.trim() ?? ''
   const actual = values.hours_spent?.trim() ?? ''
   const deviates = planned !== '' && actual !== '' && Number(planned) !== Number(actual)
-  const showDeviation = deviates || Boolean(values.deviation_reason?.trim())
+  const maxHours = String(options.workday_hours)
 
   // ------------------------------------------------------------ AI draft hints
 
@@ -334,11 +337,11 @@ function LogFormInner({
       om_project_id: omProjects.length ? idOrNull(data.om_project_id) : null,
       title: data.title || null,
       description: data.description || null,
-      deviation_reason: showDeviation ? data.deviation_reason || null : null,
+      deviation_reason_id: idOrNull(data.deviation_reason_id),
+      is_planned: data.is_planned === 'planned',
       // An old row without a project keeps it empty unless one is chosen.
       ...(data.project_id || !log ? { project_id: idOrNull(data.project_id) } : {}),
       ...(isOwn ? { task_id: idOrNull(data.task_id) } : {}),
-      ...(isAdmin && data.is_planned ? { is_planned: data.is_planned === 'planned' } : {}),
     }
     const options = {
       onSuccess: (saved: ProdLog) => {
@@ -393,7 +396,7 @@ function LogFormInner({
           inputMode="decimal"
           step="0.25"
           min="0.25"
-          max="24"
+          max={maxHours}
           readOnly={plannedLocked}
           className={plannedLocked ? 'bg-base-200' : ''}
           error={errors.planned_hours?.message}
@@ -407,11 +410,19 @@ function LogFormInner({
           inputMode="decimal"
           step="0.25"
           min="0.25"
-          max="24"
+          max={maxHours}
           error={errors.hours_spent?.message}
           {...missing('hours', 'input')}
           {...register('hours_spent')}
         />
+        <SelectField
+          label="Planned / Unplanned"
+          error={errors.is_planned?.message}
+          {...register('is_planned')}
+        >
+          <option value="planned">Planned</option>
+          <option value="unplanned">Unplanned</option>
+        </SelectField>
         <ChoiceSelect
           label="Category"
           choices={categories}
@@ -485,33 +496,20 @@ function LogFormInner({
         error={errors.title?.message}
         {...register('title')}
       />
+      <ChoiceSelect
+        label="Reason for deviation (optional)"
+        choices={reasons}
+        emptyLabel="None"
+        hint={deviates ? 'Actual hours differ from planned.' : undefined}
+        error={errors.deviation_reason_id?.message}
+        {...register('deviation_reason_id')}
+      />
       <TextareaField
         label="Remarks (optional)"
         rows={2}
         error={errors.description?.message}
         {...register('description')}
       />
-      {isAdmin && (
-        <SelectField
-          label="Planned / Unplanned (admin)"
-          error={errors.is_planned?.message}
-          hint="Normally set from the planning deadline when the row is created."
-          {...register('is_planned')}
-        >
-          {!log && <option value="">Automatic</option>}
-          <option value="planned">Planned</option>
-          <option value="unplanned">Unplanned</option>
-        </SelectField>
-      )}
-      {showDeviation && (
-        <TextareaField
-          label="Reason for deviation (optional)"
-          rows={2}
-          hint={deviates ? 'Actual hours differ from planned.' : undefined}
-          error={errors.deviation_reason?.message}
-          {...register('deviation_reason')}
-        />
-      )}
       <div className="modal-action">
         <button type="button" className="btn btn-ghost" onClick={onDone}>
           Cancel

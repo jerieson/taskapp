@@ -1,5 +1,5 @@
 """Dropdown values: categories, statuses, priorities, work set-ups, activities, activity
-groups and O&M projects.
+groups, O&M projects and reasons for deviation.
 
 Every role can list active values (for selects); only admins write or list inactive
 values. There are no delete endpoints: values are deactivated instead.
@@ -16,6 +16,7 @@ from app.models import (
     Activity,
     ActivityGroup,
     Category,
+    DeviationReason,
     OmProject,
     Priority,
     Role,
@@ -28,9 +29,12 @@ from app.schemas.lookups import (
     CategoryCreate,
     CategoryOut,
     CategoryUpdate,
+    DeviationReasonOut,
     GroupActivitiesIn,
     LongLookupCreate,
     LongLookupUpdate,
+    LongPlainLookupCreate,
+    LongPlainLookupUpdate,
     LookupCreate,
     LookupQuery,
     LookupUpdate,
@@ -351,3 +355,51 @@ async def activate_om_project(om_project_id: int, db: SessionDep) -> OmProject:
 )
 async def deactivate_om_project(om_project_id: int, db: SessionDep) -> OmProject:
     return await service.set_active(db, OmProject, om_project_id, False)
+
+
+# ---------------------------------------------------------------- deviation reasons
+
+deviation_reasons = APIRouter(prefix="/deviation-reasons", tags=["dropdowns"])
+
+
+@deviation_reasons.get("", response_model=Page[DeviationReasonOut])
+async def list_deviation_reasons(
+    params: Query_, user: CurrentUser, db: SessionDep
+) -> Page[DeviationReasonOut]:
+    service.ensure_can_include_inactive(user, params.include_inactive)
+    return await service.list_values(
+        db, DeviationReason, DeviationReasonOut, params, params.include_inactive
+    )
+
+
+@deviation_reasons.post(
+    "", response_model=DeviationReasonOut, status_code=201, dependencies=AdminOnly
+)
+async def create_deviation_reason(data: LongPlainLookupCreate, db: SessionDep) -> DeviationReason:
+    return await service.create_value(db, DeviationReason, data)
+
+
+@deviation_reasons.put("/order", status_code=204, dependencies=AdminOnly)
+async def reorder_deviation_reasons(data: ReorderIn, db: SessionDep) -> None:
+    await service.reorder(db, DeviationReason, data.ids)
+
+
+@deviation_reasons.patch("/{reason_id}", response_model=DeviationReasonOut, dependencies=AdminOnly)
+async def update_deviation_reason(
+    reason_id: int, data: LongPlainLookupUpdate, db: SessionDep
+) -> DeviationReason:
+    return await service.update_value(db, DeviationReason, reason_id, data)
+
+
+@deviation_reasons.post(
+    "/{reason_id}/activate", response_model=DeviationReasonOut, dependencies=AdminOnly
+)
+async def activate_deviation_reason(reason_id: int, db: SessionDep) -> DeviationReason:
+    return await service.set_active(db, DeviationReason, reason_id, True)
+
+
+@deviation_reasons.post(
+    "/{reason_id}/deactivate", response_model=DeviationReasonOut, dependencies=AdminOnly
+)
+async def deactivate_deviation_reason(reason_id: int, db: SessionDep) -> DeviationReason:
+    return await service.set_active(db, DeviationReason, reason_id, False)

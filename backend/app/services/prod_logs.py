@@ -19,13 +19,13 @@ Rules enforced here:
   the project's activity group, and an O&M project is only allowed when the category
   offers one. On update, a pair that is unchanged may stay even if the admin has since
   removed the link.
-- The author's total actual hours on one date may not exceed 24, and separately their
-  total planned hours.
+- The author's total actual hours on one date may not exceed WORKDAY_HOURS, and
+  separately their total planned hours.
 - Only active values can be chosen; on update the current value may stay.
-- Weekly planning (app/core/weeks.py): a new row is planned when its week is still
-  open, unplanned otherwise. In a locked week planned hours cannot be set, changed or
-  cleared and planned rows cannot be deleted (422 `week_locked`). Admins are exempt
-  and are the only ones who can set `is_planned`.
+- Planned/Unplanned is the user's choice (Planned by default).
+- Weekly planning (app/core/weeks.py): in a locked week planned hours cannot be set,
+  changed or cleared and rows with planned hours cannot be deleted (422
+  `week_locked`). Admins are exempt.
 """
 
 import logging
@@ -47,6 +47,7 @@ from app.models import (
     Activity,
     ActivityGroupMember,
     Category,
+    DeviationReason,
     OmProject,
     ProdLog,
     Project,
@@ -57,7 +58,6 @@ from app.models import (
     WorkSetup,
 )
 from app.schemas.prod_logs import (
-    MAX_DAILY_HOURS,
     CopyDayResult,
     CopyLogs,
     CopyResult,
@@ -89,10 +89,11 @@ _LogRow = tuple[
     WorkSetup,
     Activity,
     OmProject | None,
+    DeviationReason | None,
     int | None,
     str | None,
 ]
-_ROW_LEN = 10
+_ROW_LEN = 11
 
 
 def _base_query() -> Select[_LogRow]:
@@ -106,6 +107,7 @@ def _base_query() -> Select[_LogRow]:
             WorkSetup,
             Activity,
             OmProject,
+            DeviationReason,
             Task.id,
             Task.title,
         )
@@ -116,6 +118,7 @@ def _base_query() -> Select[_LogRow]:
         .join(WorkSetup, WorkSetup.id == ProdLog.work_setup_id)
         .join(Activity, Activity.id == ProdLog.activity_id)
         .outerjoin(OmProject, OmProject.id == ProdLog.om_project_id)
+        .outerjoin(DeviationReason, DeviationReason.id == ProdLog.deviation_reason_id)
         .outerjoin(Task, Task.id == ProdLog.task_id)
     )
 
@@ -130,6 +133,7 @@ def _fields(row: Row[Any], viewer: User) -> dict[str, Any]:
         work_setup,
         activity,
         om_project,
+        deviation_reason,
         task_id,
         task_title,
     ) = row[:_ROW_LEN]
@@ -151,7 +155,7 @@ def _fields(row: Row[Any], viewer: User) -> dict[str, Any]:
         "task": TaskRef(id=task_id, title=task_title) if show_task else None,
         "title": log.title,
         "description": log.description,
-        "deviation_reason": log.deviation_reason,
+        "deviation_reason": PlainRef.model_validate(deviation_reason) if deviation_reason else None,
         "updated_by": UserRef.model_validate(editor),
         "created_at": log.created_at,
         "updated_at": log.updated_at,
@@ -211,11 +215,6 @@ def _week_locked(week: PlanWeek, field: str | None, what: str) -> AppError:
     deadline = week.deadline.strftime("%a %d %b, %H:%M")
     message = f"Planning for the week of {week.start:%d %b} closed on {deadline}: {what}"
     return AppError(422, "week_locked", message, fields={field: message} if field else None)
-
-
-def _admin_only_planned() -> AppError:
-    message = "Only an admin can change Planned/Unplanned"
-    return AppError(403, "forbidden", message, fields={"is_planned": message})
 
 
 def _hours_required() -> AppError:
@@ -286,8 +285,10 @@ async def _check_daily_total(
     column: InstrumentedAttribute[Decimal | None],
     hours: Decimal | None,
     exclude_id: int | None,
+    cap: Decimal,
 ) -> None:
-    """Reject if the author's `column` hours on `log.log_date` would total more than 24.
+    """Reject if the author's `column` hours on `log.log_date` would total more than
+    `cap` (WORKDAY_HOURS).
 
     Actual and planned hours are capped separately. An advisory lock per author
     serialises concurrent writes, so two requests cannot both pass the check and
@@ -305,10 +306,10 @@ async def _check_daily_total(
     if exclude_id is not None:
         stmt = stmt.where(ProdLog.id != exclude_id)
     others = Decimal(await db.scalar(stmt) or 0)
-    if others + hours > MAX_DAILY_HOURS:
-        left = max(MAX_DAILY_HOURS - others, Decimal(0))
+    if others + hours > cap:
+        left = max(cap - others, Decimal(0))
         kind = "planned" if column is ProdLog.planned_hours else "logged"
-        message = f"Max {MAX_DAILY_HOURS:g} h per day: {others:g} h already {kind}, {left:g} h left"
+        message = f"Max {cap:g} h per day: {others:g} h already {kind}, {left:g} h left"
         raise AppError(422, "daily_hours_exceeded", message, fields={column.key: message})
 
 
@@ -431,8 +432,6 @@ async def create_log(
 ) -> ProdLogOut:
     sent = data.model_fields_set
     is_admin = user.role == Role.ADMIN
-    if data.is_planned is not None and not is_admin:
-        raise _admin_only_planned()
     week = plan_week(data.log_date, settings)
     if data.planned_hours is not None and not week.is_open and not is_admin:
         raise _week_locked(week, "planned_hours", "log the actual hours as unplanned work")
@@ -454,6 +453,7 @@ async def create_log(
         "activity_id": data.activity_id,
         "work_setup_id": work_setup_id,
         "om_project_id": data.om_project_id,
+        "deviation_reason_id": data.deviation_reason_id,
     }
     for field, value in refs.items():
         if value is not None:
@@ -472,24 +472,32 @@ async def create_log(
         project_id=project_id,
         category_id=category_id,
         om_project_id=data.om_project_id,
-        is_planned=week.is_open if data.is_planned is None else data.is_planned,
+        is_planned=data.is_planned,
         planned_hours=data.planned_hours,
         hours_spent=data.hours_spent,
         title=data.title or None,
         description=data.description or None,
-        deviation_reason=data.deviation_reason or None,
+        deviation_reason_id=data.deviation_reason_id,
         updated_by=user.id,
     )
-    await _check_daily_total(db, log, ProdLog.hours_spent, data.hours_spent, exclude_id=None)
-    await _check_daily_total(db, log, ProdLog.planned_hours, data.planned_hours, exclude_id=None)
+    cap = settings.workday_hours
+    await _check_daily_total(db, log, ProdLog.hours_spent, data.hours_spent, None, cap)
+    await _check_daily_total(db, log, ProdLog.planned_hours, data.planned_hours, None, cap)
     db.add(log)
     await db.commit()
     logger.info("prod_log_created", extra={"fields": {"log_id": log.id}})
     return await _load(db, user, log.id)
 
 
-_REF_FIELDS = ("work_setup_id", "category_id", "project_id", "activity_id", "om_project_id")
-_TEXT_FIELDS = ("title", "description", "deviation_reason")
+_REF_FIELDS = (
+    "work_setup_id",
+    "category_id",
+    "project_id",
+    "activity_id",
+    "om_project_id",
+    "deviation_reason_id",
+)
+_TEXT_FIELDS = ("title", "description")
 
 
 def _check_planned_lock(log: ProdLog, data: ProdLogUpdate, settings: Settings) -> None:
@@ -513,8 +521,6 @@ async def update_log(
     log = await _get_writable(db, user, log_id)
     sent = data.model_fields_set
     if user.role != Role.ADMIN:
-        if data.is_planned is not None:
-            raise _admin_only_planned()
         _check_planned_lock(log, data, settings)
 
     # Validate the final values before touching the row, so a rejected update leaves
@@ -549,10 +555,11 @@ async def update_log(
         if field in sent:
             setattr(log, field, getattr(data, field) or None)
 
+    cap = settings.workday_hours
     if sent & {"log_date", "hours_spent"}:
-        await _check_daily_total(db, log, ProdLog.hours_spent, log.hours_spent, log.id)
+        await _check_daily_total(db, log, ProdLog.hours_spent, log.hours_spent, log.id, cap)
     if sent & {"log_date", "planned_hours"}:
-        await _check_daily_total(db, log, ProdLog.planned_hours, log.planned_hours, log.id)
+        await _check_daily_total(db, log, ProdLog.planned_hours, log.planned_hours, log.id, cap)
     log.updated_by = user.id
 
     await db.commit()
@@ -562,10 +569,11 @@ async def update_log(
 
 async def delete_log(db: AsyncSession, user: User, log_id: int, settings: Settings) -> None:
     log = await _get_writable(db, user, log_id)
-    if log.is_planned and user.role != Role.ADMIN:
+    # Rows holding planned hours are the week's plan: kept once the week is locked.
+    if log.planned_hours is not None and user.role != Role.ADMIN:
         week = plan_week(log.log_date, settings)
         if not week.is_open:
-            raise _week_locked(week, None, "planned rows can no longer be deleted")
+            raise _week_locked(week, None, "rows with planned hours can no longer be deleted")
     await db.delete(log)
     await db.commit()
     logger.info("prod_log_deleted", extra={"fields": {"log_id": log_id}})
@@ -598,7 +606,7 @@ async def _copyable(db: AsyncSession, log: ProdLog) -> bool:
 async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Settings) -> CopyResult:
     """Copy the caller's rows from a day or a week to days in open weeks, as planned rows.
 
-    A target day whose planned total would pass 24 hours is skipped as a whole. Rows
+    A target day whose planned total would pass WORKDAY_HOURS is skipped as a whole. Rows
     with an inactive or unlinked value are left out. All in one transaction.
     """
     for target in data.to_dates:
@@ -649,7 +657,7 @@ async def copy_logs(db: AsyncSession, user: User, data: CopyLogs, settings: Sett
         if not rows:
             days.append(CopyDayResult(date=target, created=0, skipped_reason="nothing_to_copy"))
             continue
-        if Decimal(planned_on.get(target, 0)) + sum(hours, Decimal(0)) > MAX_DAILY_HOURS:
+        if Decimal(planned_on.get(target, 0)) + sum(hours, Decimal(0)) > settings.workday_hours:
             days.append(
                 CopyDayResult(date=target, created=0, skipped_reason="daily_hours_exceeded")
             )

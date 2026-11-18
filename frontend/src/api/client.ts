@@ -6,6 +6,7 @@
  *   csrf_token cookie is missing (first visit, before login) it is fetched first.
  * - A FormData body is sent as multipart (file uploads); anything else as JSON.
  * - Errors are thrown as ApiError, parsed from the standard error format.
+ * - `download` saves a file response (e.g. a CSV export) under the server's file name.
  * - A 401 calls the handler registered with setUnauthorizedHandler (clears the
  *   cached user and redirects to /login), unless the request opts out.
  */
@@ -143,7 +144,52 @@ async function request<T>(method: Method, path: string, options: RequestOptions 
   return (await response.json()) as T
 }
 
+/** The file name from a Content-Disposition header (RFC 6266), if any. */
+function attachmentName(header: string | null): string | null {
+  if (!header) return null
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1]
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded)
+    } catch {
+      // Fall through to the plain parameter.
+    }
+  }
+  return /filename="([^"]+)"/i.exec(header)?.[1] ?? null
+}
+
+/** GET a file and hand it to the browser as a download. */
+async function download(
+  path: string,
+  query: Record<string, QueryValue>,
+  fallbackName: string,
+): Promise<string> {
+  let response: Response
+  try {
+    response = await fetch(buildUrl(path, query), { credentials: 'same-origin' })
+  } catch {
+    throw new ApiError(0, 'network_error', 'Could not reach the server. Check your connection.')
+  }
+  if (!response.ok) {
+    const error = await parseError(response)
+    if (response.status === 401) onUnauthorized?.()
+    throw error
+  }
+  const name = attachmentName(response.headers.get('Content-Disposition')) ?? fallbackName
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.append(link)
+  link.click()
+  link.remove()
+  // Give the browser a moment to start the download before releasing the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return name
+}
+
 export const api = {
+  download,
   get: <T>(path: string, options?: Omit<RequestOptions, 'body'>) =>
     request<T>('GET', path, options),
   post: <T = void>(path: string, body?: unknown, options?: RequestOptions) =>

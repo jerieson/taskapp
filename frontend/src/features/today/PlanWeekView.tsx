@@ -350,7 +350,7 @@ function PlanDay({ date, planned, workday, rows, canPlan, onAdd, onEdit, onDelet
                 >
                   <PencilIcon className="size-4" />
                 </button>
-                {(canPlan || !log.is_planned) && (
+                {(canPlan || log.planned_hours === null) && (
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm btn-square"

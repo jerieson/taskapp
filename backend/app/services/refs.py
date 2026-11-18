@@ -3,7 +3,16 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.models import Activity, Category, OmProject, Priority, Project, Status, WorkSetup
+from app.models import (
+    Activity,
+    Category,
+    DeviationReason,
+    OmProject,
+    Priority,
+    Project,
+    Status,
+    WorkSetup,
+)
 
 type RefModel = (
     type[Category]
@@ -13,6 +22,7 @@ type RefModel = (
     | type[WorkSetup]
     | type[Activity]
     | type[OmProject]
+    | type[DeviationReason]
 )
 
 # Request field -> (model, noun used in messages)
@@ -24,6 +34,7 @@ REFS: dict[str, tuple[RefModel, str]] = {
     "work_setup_id": (WorkSetup, "work set-up"),
     "activity_id": (Activity, "activity"),
     "om_project_id": (OmProject, "O&M project"),
+    "deviation_reason_id": (DeviationReason, "reason for deviation"),
 }
 
 

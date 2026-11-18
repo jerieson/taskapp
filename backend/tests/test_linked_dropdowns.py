@@ -27,7 +27,8 @@ async def test_work_setups_seeded_with_one_default(client: AsyncClient, db: Asyn
     items = (await client.get("/api/work-setups")).json()["items"]
     assert len(items) == 3
     assert sum(item["is_default"] for item in items) == 1
-    assert items[0]["is_default"]  # first in display order
+    # On-Site is the default (owner's correction after checking the sheet).
+    assert [item["label"] for item in items if item["is_default"]] == ["On-Site"]
 
 
 async def test_work_setup_default_rules(client: AsyncClient, db: AsyncSession) -> None:

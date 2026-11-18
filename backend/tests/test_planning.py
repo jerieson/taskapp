@@ -14,10 +14,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.models import Role
+from app.models import DeviationReason, Role
 from tests.auth_helpers import login_as
 from tests.factories import LinkedRefs, make_linked, make_log, make_team, make_user
 
@@ -74,9 +75,9 @@ async def test_deadline_edges(client: AsyncClient, db: AsyncSession, set_now: Se
 
     set_now(AT_DEADLINE)
     _locked(await client.post("/api/logs", json=_body(refs, MONDAY, planned_hours=4)))
-    # Actual hours can still be logged: the row is unplanned.
+    # Actual hours can still be logged (Planned unless the user says otherwise).
     row = await _create(client, _body(refs, MONDAY, hours_spent=2))
-    assert (row["is_planned"], row["planned_hours"]) == (False, None)
+    assert (row["is_planned"], row["planned_hours"]) == (True, None)
     # The week after is still open.
     row = await _create(client, _body(refs, MONDAY + timedelta(days=7), planned_hours=4))
     assert row["is_planned"] is True
@@ -95,23 +96,25 @@ async def test_weekend_belongs_to_the_week_before(
     _locked(await client.post("/api/logs", json=_body(refs, date(2026, 11, 22), planned_hours=2)))
 
 
-async def test_is_planned_not_settable_by_users(
+async def test_users_choose_planned_or_unplanned(
     client: AsyncClient, db: AsyncSession, set_now: SetNow
 ) -> None:
     me = await login_as(client, db)
     refs = await make_linked(db)
     set_now(WEDNESDAY)
-    body = _body(refs, MONDAY, planned_hours=2, is_planned=False)
-    resp = await client.post("/api/logs", json=body)
-    assert resp.status_code == 403
-    assert "is_planned" in resp.json()["error"]["fields"]
+    row = await _create(client, _body(refs, MONDAY, planned_hours=2))
+    assert row["is_planned"] is True  # the default
+    row = await _create(client, _body(refs, THIS_MONDAY, hours_spent=1, is_planned=False))
+    assert row["is_planned"] is False
 
+    # Changeable at any time, also in a locked week.
     log = await make_log(db, user=me, log_date=THIS_MONDAY, is_planned=False)
     resp = await client.patch(f"/api/logs/{log.id}", json={"is_planned": True})
-    assert resp.status_code == 403
-    # Null is the same as omitting it on create.
-    row = await _create(client, _body(refs, MONDAY, planned_hours=2, is_planned=None))
-    assert row["is_planned"] is True
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["is_planned"] is True
+    assert (await client.patch(f"/api/logs/{log.id}", json={"is_planned": None})).status_code == 422
+    resp = await client.post("/api/logs", json=_body(refs, MONDAY, hours_spent=1, is_planned=None))
+    assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------- locked weeks
@@ -133,6 +136,7 @@ async def test_locked_planned_hours_and_deletes(
     _locked(await client.patch(url, json={"planned_hours": None, "hours_spent": 5}))
     _locked(await client.patch(url, json={"log_date": (MONDAY + timedelta(days=7)).isoformat()}))
     _locked(await client.delete(url))
+    reason = await db.scalar(select(DeviationReason.id).limit(1))
     # Actual hours, remarks and the deviation reason can change at any time, and
     # sending the unchanged planned hours (as the edit form does) is fine.
     resp = await client.patch(
@@ -141,16 +145,20 @@ async def test_locked_planned_hours_and_deletes(
             "planned_hours": 5,
             "hours_spent": 6,
             "description": "Took longer",
-            "deviation_reason": "Extra fixes",
+            "deviation_reason_id": reason,
+            "is_planned": False,
         },
     )
     assert resp.status_code == 200, resp.text
     assert (resp.json()["planned_hours"], resp.json()["hours_spent"]) == (5, 6)
+    assert resp.json()["deviation_reason"]["id"] == reason
+    # Still the week's plan (it holds planned hours), even when marked Unplanned.
+    _locked(await client.delete(url))
 
     # Planned hours cannot be added to a row in a locked week either.
     unplanned = await make_log(db, user=me, log_date=MONDAY, is_planned=False, **refs.ids())
     _locked(await client.patch(f"/api/logs/{unplanned.id}", json={"planned_hours": 1}))
-    # Unplanned rows can be deleted.
+    # Rows without planned hours can be deleted.
     assert (await client.delete(f"/api/logs/{unplanned.id}")).status_code == 204
 
 
@@ -171,11 +179,9 @@ async def test_admin_override(client: AsyncClient, db: AsyncSession, set_now: Se
     refs = await make_linked(db)
     set_now(AT_DEADLINE)
 
-    # Admin can plan in a locked week and set is_planned explicitly.
+    # Admin can plan in a locked week.
     row = await _create(client, _body(refs, MONDAY, planned_hours=4))
-    assert row["is_planned"] is False
-    row = await _create(client, _body(refs, MONDAY, planned_hours=4, is_planned=True))
-    assert row["is_planned"] is True
+    assert (row["is_planned"], row["planned_hours"]) == (True, 4)
 
     theirs = await make_log(
         db, user=dev, log_date=MONDAY, planned_hours=Decimal(3), is_planned=True, **refs.ids()

@@ -22,6 +22,7 @@ import { useToast } from '../../components/toast-context'
 import { formatDay } from '../../lib/format'
 import AiLogEntry from '../ai/AiLogEntry'
 import { PlanReminder } from '../today/PlanningParts'
+import ExportLogs from './ExportLogs'
 import LogFormBody from './LogForm'
 import LogList, { LogListSkeleton } from './LogList'
 import { logHours, logLabel } from './logText'
@@ -167,7 +168,12 @@ export default function LogsPage() {
       <PageHeader
         title="Logs"
         description="Your productivity log: planned hours ahead of time, actual hours afterwards. A day can hold at most 24 planned and 24 actual hours."
-        actions={newButton}
+        actions={
+          <>
+            <ExportLogs />
+            {newButton}
+          </>
+        }
       />
 
       <PlanReminder className="mb-4" />

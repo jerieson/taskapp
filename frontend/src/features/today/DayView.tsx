@@ -16,6 +16,7 @@ import {
   type ProdLog,
   type ProdLogItem,
 } from '../../api/logs'
+import { useLogOptions } from '../../api/lookups'
 import { usePlanningStatus } from '../../api/planning'
 import AsyncState from '../../components/AsyncState'
 import ColorDot from '../../components/ColorDot'
@@ -83,14 +84,15 @@ function ActualHoursInput({ log }: { log: ProdLogItem }) {
   const [value, setValue] = useState(log.hours_spent === null ? '' : String(log.hours_spent))
   const [error, setError] = useState<string | null>(null)
   const label = logLabel(log)
+  const maxHours = useLogOptions().data?.workday_hours ?? 24
 
   function commit(event?: FormEvent) {
     event?.preventDefault()
     const trimmed = value.trim()
     const next = trimmed === '' ? null : Number(trimmed)
     if (next === log.hours_spent) return setError(null)
-    if (next !== null && !(HOURS_PATTERN.test(trimmed) && next > 0 && next <= 24)) {
-      return setError('0.01 to 24 h')
+    if (next !== null && !(HOURS_PATTERN.test(trimmed) && next > 0 && next <= maxHours)) {
+      return setError(`0.01 to ${maxHours} h`)
     }
     if (next === null && log.planned_hours === null) return setError('Enter hours')
     setError(null)
@@ -115,7 +117,7 @@ function ActualHoursInput({ log }: { log: ProdLogItem }) {
           inputMode="decimal"
           step="0.25"
           min="0.25"
-          max="24"
+          max={maxHours}
           placeholder="Actual"
           value={value}
           disabled={update.isPending}
@@ -312,7 +314,7 @@ export default function DayView({
                   key={log.id}
                   log={log}
                   plannedLocked={plannedLocked && !isAdmin}
-                  canDelete={isAdmin || !log.is_planned || weekOpen}
+                  canDelete={isAdmin || log.planned_hours === null || weekOpen}
                   onEdit={() => setEditing(log)}
                   onDelete={() => setDeleting(log)}
                 />

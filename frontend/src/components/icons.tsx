@@ -326,6 +326,14 @@ export function UploadIcon(props: IconProps) {
   )
 }
 
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </Stroke>
+  )
+}
+
 export function LockIcon(props: IconProps) {
   return (
     <Stroke {...props}>

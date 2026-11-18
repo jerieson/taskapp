@@ -28,4 +28,4 @@ async def log_draft(
     Errors: 503 `ai_disabled`, 429 `ai_daily_limit_exceeded`, 502 `ai_invalid_output`
     or `ai_provider_error`."""
     today = datetime.now(settings.tz).date()
-    return await nl_log_entry.draft_log(db, ai, user, data.text, today)
+    return await nl_log_entry.draft_log(db, ai, user, data.text, today, settings.workday_hours)

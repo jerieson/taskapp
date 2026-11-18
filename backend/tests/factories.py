@@ -20,6 +20,7 @@ from app.models import (
     ActivityGroup,
     ActivityGroupMember,
     Category,
+    DeviationReason,
     OmProject,
     Priority,
     ProdLog,
@@ -101,6 +102,10 @@ async def make_activity(session: AsyncSession, **kw: Any) -> Activity:
 
 async def make_om_project(session: AsyncSession, **kw: Any) -> OmProject:
     return await _save(session, OmProject(**{"label": f"OM project {_n()}", **kw}))
+
+
+async def make_deviation_reason(session: AsyncSession, **kw: Any) -> DeviationReason:
+    return await _save(session, DeviationReason(**{"label": f"Reason {_n()}", **kw}))
 
 
 async def make_activity_group(

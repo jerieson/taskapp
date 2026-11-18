@@ -40,13 +40,13 @@ PRIORITIES: list[dict[str, Any]] = [
     {"label": "High"},
     {"label": "Urgent"},
 ]
+# The productivity sheet's categories. The Data tab import matches them by label and
+# links their projects.
 CATEGORIES: list[dict[str, Any]] = [
-    {"label": "Development"},
-    {"label": "Bug Fix"},
-    {"label": "Code Review"},
-    {"label": "Meeting"},
-    {"label": "Documentation"},
-    {"label": "Research"},
+    {"label": "Major Enhancements"},
+    {"label": "Minor Enhancements"},
+    {"label": "Operations & Maintenance", "requires_om_project": True},
+    {"label": "Others"},
 ]
 
 

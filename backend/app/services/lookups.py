@@ -29,6 +29,7 @@ from app.models import (
     ActivityGroup,
     ActivityGroupMember,
     Category,
+    DeviationReason,
     OmProject,
     Priority,
     Role,
@@ -39,7 +40,16 @@ from app.models import (
 
 logger = logging.getLogger("app.lookups")
 
-type LookupRow = Category | Status | Priority | WorkSetup | Activity | ActivityGroup | OmProject
+type LookupRow = (
+    Category
+    | Status
+    | Priority
+    | WorkSetup
+    | Activity
+    | ActivityGroup
+    | OmProject
+    | DeviationReason
+)
 type LookupModel = (
     type[Category]
     | type[Status]
@@ -48,6 +58,7 @@ type LookupModel = (
     | type[Activity]
     | type[ActivityGroup]
     | type[OmProject]
+    | type[DeviationReason]
 )
 type DefaultModel = type[Status] | type[Priority] | type[WorkSetup]
 
@@ -59,6 +70,7 @@ NOUN: dict[type, str] = {
     Activity: "activity",
     ActivityGroup: "activity group",
     OmProject: "O&M project",
+    DeviationReason: "reason for deviation",
 }
 
 

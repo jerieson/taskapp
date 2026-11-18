@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts.nl_log_entry import LogDraftLLM
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.models import Role, WorkSetup
 from app.models.ai import AIRequest
 from app.models.enums import AIFeature
@@ -234,7 +234,10 @@ async def test_hours_are_rounded_to_hundredths(
     await login_as(client, db)
 
     assert (await _draft(client, fake_ai, hours_spent=1.236))["hours_spent"] == 1.24
-    assert (await _draft(client, fake_ai, hours_spent=24))["hours_spent"] == 24
+    # Hours above the daily cap (WORKDAY_HOURS) are dropped.
+    cap = float(get_settings().workday_hours)
+    assert (await _draft(client, fake_ai, hours_spent=cap))["hours_spent"] == cap
+    assert (await _draft(client, fake_ai, hours_spent=cap + 0.01))["hours_spent"] is None
     assert (await _draft(client, fake_ai, planned_hours=0.555))["planned_hours"] == 0.56
 
 

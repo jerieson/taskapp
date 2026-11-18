@@ -135,3 +135,22 @@ export function useDeleteLog() {
     onSuccess: invalidate,
   })
 }
+
+export interface LogExportParams {
+  date_from: string
+  date_to: string
+  /** Omitted: your own logs. */
+  user_id?: number
+}
+
+/** Download a person's logs as CSV in the team sheet's format. Resolves to the file name. */
+export function useExportLogs() {
+  return useMutation({
+    mutationFn: (params: LogExportParams) =>
+      api.download(
+        '/logs/export',
+        { ...params },
+        `productivity_log_${params.date_from}_${params.date_to}.csv`,
+      ),
+  })
+}

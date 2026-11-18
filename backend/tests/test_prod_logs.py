@@ -2,6 +2,7 @@
 
 Linked-dropdown rules and planned/actual fields are in test_prod_log_fields.py."""
 
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -22,6 +23,13 @@ from tests.factories import (
 )
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture(autouse=True)
+def _daily_cap(settings_override: Callable[..., object]) -> None:
+    """Daily totals are capped at WORKDAY_HOURS; pin it so the numbers below hold."""
+    settings_override(workday_hours=Decimal(9))
+
 
 TODAY = date.today()
 
@@ -226,23 +234,23 @@ async def test_deleting_task_keeps_log(client: AsyncClient, db: AsyncSession) ->
 
 async def test_daily_cap_on_create(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
-    await make_log(db, user=me, hours_spent=Decimal("20"))
-    await make_log(db, user=me, log_date=TODAY - timedelta(days=1), hours_spent=Decimal("20"))
+    await make_log(db, user=me, hours_spent=Decimal("5"))
+    await make_log(db, user=me, log_date=TODAY - timedelta(days=1), hours_spent=Decimal("5"))
 
     resp = await client.post("/api/logs", json=await _body(db, hours_spent=4.01))
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "daily_hours_exceeded"
     assert "hours_spent" in resp.json()["error"]["fields"]
 
-    # Exactly 24 is allowed.
+    # Exactly the cap (WORKDAY_HOURS) is allowed.
     assert (await client.post("/api/logs", json=await _body(db, hours_spent=4))).status_code == 201
     # Someone else's hours on the same day don't count.
-    await make_log(db, hours_spent=Decimal("24"))
+    await make_log(db, hours_spent=Decimal("9"))
 
 
 async def test_daily_cap_on_update(client: AsyncClient, db: AsyncSession) -> None:
     me = await login_as(client, db)
-    await make_log(db, user=me, hours_spent=Decimal("20"))
+    await make_log(db, user=me, hours_spent=Decimal("5"))
     log = await make_log(db, user=me, hours_spent=Decimal("4"))
     elsewhere = await make_log(
         db, user=me, log_date=TODAY - timedelta(days=1), hours_spent=Decimal("5")

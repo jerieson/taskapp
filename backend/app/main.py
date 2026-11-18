@@ -103,6 +103,7 @@ def create_app() -> FastAPI:
         lookups.activities,
         lookups.activity_groups,
         lookups.om_projects,
+        lookups.deviation_reasons,
     ):
         app.include_router(router, prefix="/api")
 

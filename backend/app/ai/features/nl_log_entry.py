@@ -18,7 +18,6 @@ from app.models import Status, Task, User
 from app.models.enums import AIFeature
 from app.schemas.ai import LogDraftField, LogDraftOut
 from app.schemas.lookups import LogOptionProject, LogOptionsOut
-from app.schemas.prod_logs import MAX_DAILY_HOURS
 from app.schemas.tasks import Description, Title
 from app.services.log_options import get_log_options
 
@@ -51,15 +50,15 @@ def _date(value: str | None) -> date | None:
         return None
 
 
-def _hours(value: float | None) -> Decimal | None:
-    """Rounded to 0.01; None unless it is a usable log value (0 < h <= 24)."""
+def _hours(value: float | None, max_hours: Decimal) -> Decimal | None:
+    """Rounded to 0.01; None unless it is a usable log value (0 < h <= max_hours)."""
     if value is None:
         return None
     try:
         hours = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation:  # nan / inf
         return None
-    return hours if Decimal(0) < hours <= MAX_DAILY_HOURS else None
+    return hours if Decimal(0) < hours <= max_hours else None
 
 
 def _prompt_context(options: LogOptionsOut) -> dict[str, list[dict[str, object]]]:
@@ -112,9 +111,10 @@ class _Linked:
 
 
 async def draft_log(
-    db: AsyncSession, ai: AIClient, user: User, text: str, today: date
+    db: AsyncSession, ai: AIClient, user: User, text: str, today: date, max_hours: Decimal
 ) -> LogDraftOut:
-    options = await get_log_options(db)
+    """`max_hours` is the daily cap (WORKDAY_HOURS): larger hours are dropped."""
+    options = await get_log_options(db, max_hours)
     tasks = await _open_tasks(db, user)
     prompt = build_prompt(
         text=text,
@@ -155,8 +155,8 @@ async def draft_log(
     draft = LogDraftOut(
         log_date=_date(raw.log_date),
         work_setup_id=work_setup_id,
-        planned_hours=_hours(raw.planned_hours),
-        hours_spent=_hours(raw.hours_spent),
+        planned_hours=_hours(raw.planned_hours, max_hours),
+        hours_spent=_hours(raw.hours_spent, max_hours),
         category_id=category_id,
         project_id=project_id,
         activity_id=activity_id,
