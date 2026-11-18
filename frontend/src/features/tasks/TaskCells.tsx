@@ -1,13 +1,11 @@
 /*
  * Task list cells shared by /tasks and /runs/:id.
  */
-import { Link } from 'react-router'
 
 import { errorMessage } from '../../api/client'
 import { useSelectOptions } from '../../api/lookups'
 import { useUpdateTask, type Task } from '../../api/tasks'
 import ColorDot from '../../components/ColorDot'
-import { RepeatIcon } from '../../components/icons'
 import { useToast } from '../../components/toast-context'
 import { formatDay } from '../../lib/format'
 
@@ -50,8 +48,8 @@ export function StatusQuickSelect({ task }: { task: Task }) {
   )
 }
 
-/** Title with project/category; `showRunLink` adds a link to the task's process run. */
-export function TaskTitle({ task, showRunLink = false }: { task: Task; showRunLink?: boolean }) {
+/** Title with project/category. */
+export function TaskTitle({ task }: { task: Task }) {
   const meta = [task.project?.name, task.category?.label].filter(Boolean)
   return (
     <span className="flex min-w-0 flex-col gap-0.5">
@@ -62,15 +60,6 @@ export function TaskTitle({ task, showRunLink = false }: { task: Task; showRunLi
         <span className="text-xs font-normal break-words text-base-content/80">
           {meta.join(' · ')}
         </span>
-      )}
-      {showRunLink && task.process_run_id !== null && (
-        <Link
-          to={`/runs/${task.process_run_id}`}
-          className="link inline-flex w-fit items-center gap-1 text-xs font-normal text-base-content/80 link-hover"
-        >
-          <RepeatIcon className="size-3.5" />
-          From a process run
-        </Link>
       )}
     </span>
   )

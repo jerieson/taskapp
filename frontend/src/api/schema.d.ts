@@ -477,6 +477,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/support/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Support
+         * @description Create support entries from the team's sheet (see the service for the rules).
+         *     Rows already in the dictionary are skipped, so re-importing creates nothing new.
+         */
+        post: operations["import_support_api_admin_support_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -771,236 +792,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/processes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Processes
-         * @description Active processes first, then by name.
-         */
-        get: operations["list_processes_api_processes_get"];
-        put?: never;
-        /** Create Process */
-        post: operations["create_process_api_processes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/processes/{process_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Process */
-        get: operations["get_process_api_processes__process_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Process
-         * @description Only while the process has no runs (409 `process_has_runs`); deactivate it instead.
-         */
-        delete: operations["delete_process_api_processes__process_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Process */
-        patch: operations["update_process_api_processes__process_id__patch"];
-        trace?: never;
-    };
-    "/api/processes/{process_id}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate Process */
-        post: operations["activate_process_api_processes__process_id__activate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/processes/{process_id}/deactivate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Deactivate Process
-         * @description A deactivated process keeps its runs but cannot start new ones.
-         */
-        post: operations["deactivate_process_api_processes__process_id__deactivate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/processes/{process_id}/steps": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Sync Steps
-         * @description Set the complete step list in one transaction: steps with `id` are updated,
-         *     steps without are added, steps left out are deleted.
-         */
-        put: operations["sync_steps_api_processes__process_id__steps_put"];
-        /**
-         * Add Step
-         * @description Append a step at the end.
-         */
-        post: operations["add_step_api_processes__process_id__steps_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/processes/{process_id}/steps/order": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Reorder Steps
-         * @description Set the step order. `step_ids` must list every step of the process.
-         */
-        put: operations["reorder_steps_api_processes__process_id__steps_order_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/processes/{process_id}/steps/{step_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Step
-         * @description Tasks already copied from this step into runs are kept.
-         */
-        delete: operations["delete_step_api_processes__process_id__steps__step_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Step */
-        patch: operations["update_step_api_processes__process_id__steps__step_id__patch"];
-        trace?: never;
-    };
-    "/api/processes/{process_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Runs
-         * @description Newest first.
-         */
-        get: operations["list_runs_api_processes__process_id__runs_get"];
-        put?: never;
-        /**
-         * Start Run
-         * @description Create a run and one task per step (default status and priority).
-         */
-        post: operations["start_run_api_processes__process_id__runs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Runs
-         * @description All of the caller's runs across their processes, newest first.
-         */
-        get: operations["list_runs_api_runs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/runs/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Run
-         * @description The run with its tasks and progress. Task status changes go through /api/tasks.
-         */
-        get: operations["get_run_api_runs__run_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/runs/{run_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel Run
-         * @description Only runs in progress. The run's tasks are kept.
-         */
-        post: operations["cancel_run_api_runs__run_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/teams/{team_id}/logs": {
         parameters: {
             query?: never;
@@ -1276,6 +1067,102 @@ export interface paths {
         get: operations["task_counts_api_dashboard_tasks_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entries */
+        get: operations["list_entries_api_support_get"];
+        put?: never;
+        /** Create Entry */
+        post: operations["create_entry_api_support_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Facets
+         * @description Distinct projects, modules and sub-modules of active entries.
+         */
+        get: operations["get_facets_api_support_facets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Entry */
+        get: operations["get_entry_api_support__entry_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Entry
+         * @description Author or admin only (403 `not_author` otherwise).
+         */
+        patch: operations["update_entry_api_support__entry_id__patch"];
+        trace?: never;
+    };
+    "/api/support/{entry_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Entry */
+        post: operations["activate_entry_api_support__entry_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support/{entry_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate Entry
+         * @description Hidden from the list unless `include_inactive=true`.
+         */
+        post: operations["deactivate_entry_api_support__entry_id__deactivate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2094,6 +1981,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/support-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Support Types */
+        get: operations["list_support_types_api_support_types_get"];
+        put?: never;
+        /** Create Support Type */
+        post: operations["create_support_type_api_support_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support-types/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Support Types */
+        put: operations["reorder_support_types_api_support_types_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support-types/{type_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Support Type */
+        patch: operations["update_support_type_api_support_types__type_id__patch"];
+        trace?: never;
+    };
+    "/api/support-types/{type_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Support Type */
+        post: operations["activate_support_type_api_support_types__type_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support-types/{type_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Support Type */
+        post: operations["deactivate_support_type_api_support_types__type_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2193,6 +2166,14 @@ export interface components {
              */
             file: string;
         };
+        /** Body_import_support_api_admin_support_import_post */
+        Body_import_support_api_admin_support_import_post: {
+            /**
+             * File
+             * @description The support dictionary sheet saved as CSV
+             */
+            file: string;
+        };
         /** CategoryCreate */
         CategoryCreate: {
             /** Label */
@@ -2261,8 +2242,8 @@ export interface components {
          *     `from_week` (any date in the source week): each row goes to the target date with
          *     the same weekday (Monday's rows to the Monday in `to_dates`, and so on).
          *     Copies are planned rows: planned hours = the source's planned hours, else its actual
-         *     hours; no actual hours. Category, project, activity, O&M project and work set-up are
-         *     kept.
+         *     hours; no actual hours. Category, project, activity, O&M project, work set-up and
+         *     remarks are kept (not the reason for deviation).
          */
         CopyLogs: {
             /**
@@ -2513,6 +2494,13 @@ export interface components {
              * @default 0
              */
             om_flags: number;
+        };
+        /** ImportRowError */
+        ImportRowError: {
+            /** Row */
+            row: number;
+            /** Message */
+            message: string;
         };
         /** InviteAcceptIn */
         InviteAcceptIn: {
@@ -2934,17 +2922,6 @@ export interface components {
             /** Offset */
             offset: number;
         };
-        /** Page[ProcessListItem] */
-        Page_ProcessListItem_: {
-            /** Items */
-            items: components["schemas"]["ProcessListItem"][];
-            /** Total */
-            total: number;
-            /** Limit */
-            limit: number;
-            /** Offset */
-            offset: number;
-        };
         /** Page[ProdLogListItem] */
         Page_ProdLogListItem_: {
             /** Items */
@@ -2967,10 +2944,10 @@ export interface components {
             /** Offset */
             offset: number;
         };
-        /** Page[RunOut] */
-        Page_RunOut_: {
+        /** Page[StatusOut] */
+        Page_StatusOut_: {
             /** Items */
-            items: components["schemas"]["RunOut"][];
+            items: components["schemas"]["StatusOut"][];
             /** Total */
             total: number;
             /** Limit */
@@ -2978,10 +2955,21 @@ export interface components {
             /** Offset */
             offset: number;
         };
-        /** Page[StatusOut] */
-        Page_StatusOut_: {
+        /** Page[SupportEntryOut] */
+        Page_SupportEntryOut_: {
             /** Items */
-            items: components["schemas"]["StatusOut"][];
+            items: components["schemas"]["SupportEntryOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[SupportTypeOut] */
+        Page_SupportTypeOut_: {
+            /** Items */
+            items: components["schemas"]["SupportTypeOut"][];
             /** Total */
             total: number;
             /** Limit */
@@ -3158,107 +3146,6 @@ export interface components {
             color: string | null;
             /** Is Default */
             is_default: boolean;
-        };
-        /** ProcessCreate */
-        ProcessCreate: {
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Steps
-             * @default []
-             */
-            steps: components["schemas"]["StepCreate"][];
-        };
-        /** ProcessListItem */
-        ProcessListItem: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string | null;
-            /** Is Active */
-            is_active: boolean;
-            /** Step Count */
-            step_count: number;
-            /** Run Count */
-            run_count: number;
-            /** Active Run Count */
-            active_run_count: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** ProcessOut */
-        ProcessOut: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string | null;
-            /** Is Active */
-            is_active: boolean;
-            /** Step Count */
-            step_count: number;
-            /** Run Count */
-            run_count: number;
-            /** Active Run Count */
-            active_run_count: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Steps */
-            steps: components["schemas"]["ProcessStepOut"][];
-        };
-        /** ProcessRef */
-        ProcessRef: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Is Active */
-            is_active: boolean;
-        };
-        /** ProcessStepOut */
-        ProcessStepOut: {
-            /** Id */
-            id: number;
-            /** Step Order */
-            step_order: number;
-            /** Title */
-            title: string;
-            /** Description */
-            description: string | null;
-            default_category: components["schemas"]["LookupRef"] | null;
-            /** Estimated Hours */
-            estimated_hours: number | null;
-        };
-        /**
-         * ProcessUpdate
-         * @description Omitted fields keep their value. Steps are changed through the step endpoints.
-         */
-        ProcessUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Description */
-            description?: string | null;
         };
         /**
          * ProdLogBulkCreate
@@ -3516,55 +3403,6 @@ export interface components {
          * @enum {string}
          */
         Role: "admin" | "manager" | "dev";
-        /** RunCreate */
-        RunCreate: {
-            /** Due Date */
-            due_date?: string | null;
-        };
-        /** RunDetail */
-        RunDetail: {
-            /** Id */
-            id: number;
-            process: components["schemas"]["ProcessRef"];
-            status: components["schemas"]["RunStatus"];
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /** Completed At */
-            completed_at: string | null;
-            progress: components["schemas"]["RunProgress"];
-            /** Tasks */
-            tasks: components["schemas"]["TaskOut"][];
-        };
-        /** RunOut */
-        RunOut: {
-            /** Id */
-            id: number;
-            process: components["schemas"]["ProcessRef"];
-            status: components["schemas"]["RunStatus"];
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /** Completed At */
-            completed_at: string | null;
-            progress: components["schemas"]["RunProgress"];
-        };
-        /** RunProgress */
-        RunProgress: {
-            /** Done */
-            done: number;
-            /** Total */
-            total: number;
-        };
-        /**
-         * RunStatus
-         * @enum {string}
-         */
-        RunStatus: "in_progress" | "completed" | "cancelled";
         /** StatusCreate */
         StatusCreate: {
             /** Label */
@@ -3616,63 +3454,133 @@ export interface components {
             /** Is Done */
             is_done?: boolean | null;
         };
-        /** StepCreate */
-        StepCreate: {
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /** Default Category Id */
-            default_category_id?: number | null;
-            /** Estimated Hours */
-            estimated_hours?: (number | string) | null;
+        /** SupportEntryCreate */
+        SupportEntryCreate: {
+            /** Type Id */
+            type_id: number;
+            /** Project */
+            project?: string | null;
+            /** Module */
+            module?: string | null;
+            /** Sub Module */
+            sub_module?: string | null;
+            /** Concern */
+            concern: string;
+            /** Cause */
+            cause?: string | null;
+            /** Resolution */
+            resolution?: string | null;
+            /** Query */
+            query?: string | null;
+            /** Notes */
+            notes?: string | null;
         };
-        /**
-         * StepOrder
-         * @description Every step of the process, in the new order.
-         */
-        StepOrder: {
-            /** Step Ids */
-            step_ids: number[];
-        };
-        /**
-         * StepSync
-         * @description A step in the complete list: with `id` it updates that step, without it adds one.
-         */
-        StepSync: {
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /** Default Category Id */
-            default_category_id?: number | null;
-            /** Estimated Hours */
-            estimated_hours?: (number | string) | null;
+        /** SupportEntryOut */
+        SupportEntryOut: {
             /** Id */
-            id?: number | null;
+            id: number;
+            type: components["schemas"]["LookupRef"];
+            /** Project */
+            project: string | null;
+            /** Module */
+            module: string | null;
+            /** Sub Module */
+            sub_module: string | null;
+            /** Concern */
+            concern: string;
+            /** Cause */
+            cause: string | null;
+            /** Resolution */
+            resolution: string | null;
+            /** Query */
+            query: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Is Active */
+            is_active: boolean;
+            created_by: components["schemas"]["UserRef"];
+            updated_by: components["schemas"]["UserRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Can Edit */
+            can_edit: boolean;
         };
         /**
-         * StepUpdate
-         * @description Omitted fields keep their value. Send null to clear an optional field.
+         * SupportEntryUpdate
+         * @description Omitted fields keep their value; send null (or blank) to clear an optional
+         *     field. `type_id` and `concern` cannot be cleared.
          */
-        StepUpdate: {
-            /** Title */
-            title?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Default Category Id */
-            default_category_id?: number | null;
-            /** Estimated Hours */
-            estimated_hours?: (number | string) | null;
+        SupportEntryUpdate: {
+            /** Type Id */
+            type_id?: number | null;
+            /** Project */
+            project?: string | null;
+            /** Module */
+            module?: string | null;
+            /** Sub Module */
+            sub_module?: string | null;
+            /** Concern */
+            concern?: string | null;
+            /** Cause */
+            cause?: string | null;
+            /** Resolution */
+            resolution?: string | null;
+            /** Query */
+            query?: string | null;
+            /** Notes */
+            notes?: string | null;
         };
         /**
-         * StepsSync
-         * @description The process's complete step list in the new order. Existing steps left out are
-         *     deleted (tasks already copied from them keep their content).
+         * SupportFacets
+         * @description Distinct values in use (active entries), sorted, for filters and suggestions.
          */
-        StepsSync: {
-            /** Steps */
-            steps: components["schemas"]["StepSync"][];
+        SupportFacets: {
+            /** Projects */
+            projects: string[];
+            /** Modules */
+            modules: string[];
+            /** Sub Modules */
+            sub_modules: string[];
+        };
+        /** SupportImportOut */
+        SupportImportOut: {
+            /** Dry Run */
+            dry_run: boolean;
+            /** Created */
+            created: number;
+            /** Skipped */
+            skipped: number;
+            /** Types Created */
+            types_created: string[];
+            /** Types Matched */
+            types_matched: components["schemas"]["TypeMatch"][];
+            /** Authors Matched */
+            authors_matched: string[];
+            /** Authors Unmatched */
+            authors_unmatched: string[];
+            /** Errors */
+            errors: components["schemas"]["ImportRowError"][];
+        };
+        /** SupportTypeOut */
+        SupportTypeOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Color */
+            color: string | null;
         };
         /** TaskCounts */
         TaskCounts: {
@@ -3731,10 +3639,6 @@ export interface components {
             completed_at: string | null;
             /** Is Overdue */
             is_overdue: boolean;
-            /** Process Run Id */
-            process_run_id: number | null;
-            /** Process Step Id */
-            process_step_id: number | null;
             /**
              * Created At
              * Format: date-time
@@ -3895,6 +3799,13 @@ export interface components {
             date_to: string;
             /** Items */
             items: components["schemas"]["MemberTaskCounts"][];
+        };
+        /** TypeMatch */
+        TypeMatch: {
+            /** File Label */
+            file_label: string;
+            /** Type Label */
+            type_label: string;
         };
         /** UserCounts */
         UserCounts: {
@@ -5081,6 +4992,51 @@ export interface operations {
             };
         };
     };
+    import_support_api_admin_support_import_post: {
+        parameters: {
+            query?: {
+                /** @description Preview: report counts, save nothing */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_support_api_admin_support_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportImportOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_projects_api_projects_get: {
         parameters: {
             query?: {
@@ -5339,8 +5295,6 @@ export interface operations {
                 due_from?: string | null;
                 due_to?: string | null;
                 state?: components["schemas"]["TaskState"] | null;
-                process_run_id?: number | null;
-                in_process_run?: boolean | null;
                 sort?: components["schemas"]["TaskSort"];
             };
             header?: never;
@@ -5938,718 +5892,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeamPlanningStatus"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_processes_api_processes_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-                is_active?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Page_ProcessListItem_"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    create_process_api_processes_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProcessCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_process_api_processes__process_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_process_api_processes__process_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_process_api_processes__process_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProcessUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    activate_process_api_processes__process_id__activate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    deactivate_process_api_processes__process_id__deactivate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    sync_steps_api_processes__process_id__steps_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepsSync"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    add_step_api_processes__process_id__steps_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    reorder_steps_api_processes__process_id__steps_order_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepOrder"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_step_api_processes__process_id__steps__step_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-                step_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_step_api_processes__process_id__steps__step_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-                step_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProcessOut"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_runs_api_processes__process_id__runs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-                status?: components["schemas"]["RunStatus"] | null;
-            };
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Page_RunOut_"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    start_run_api_processes__process_id__runs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                process_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RunCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunDetail"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_runs_api_runs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-                status?: components["schemas"]["RunStatus"] | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Page_RunOut_"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_run_api_runs__run_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunDetail"];
-                };
-            };
-            /** @description Client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    cancel_run_api_runs__run_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunDetail"];
                 };
             };
             /** @description Client error */
@@ -7281,6 +6523,296 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskCounts"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_entries_api_support_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                q?: string | null;
+                type_id?: number | null;
+                project?: string | null;
+                module?: string | null;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SupportEntryOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_entry_api_support_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportEntryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportEntryOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_facets_api_support_facets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportFacets"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_entry_api_support__entry_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportEntryOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_entry_api_support__entry_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportEntryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportEntryOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_entry_api_support__entry_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportEntryOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_entry_api_support__entry_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportEntryOut"];
                 };
             };
             /** @description Client error */
@@ -9471,6 +9003,254 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeviationReasonOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_support_types_api_support_types_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SupportTypeOut_"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_support_type_api_support_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportTypeOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_support_types_api_support_types_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_support_type_api_support_types__type_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LookupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportTypeOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_support_type_api_support_types__type_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportTypeOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deactivate_support_type_api_support_types__type_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportTypeOut"];
                 };
             };
             /** @description Client error */

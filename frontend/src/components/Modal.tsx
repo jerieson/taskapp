@@ -10,11 +10,21 @@ interface ModalProps {
   actions?: ReactNode
   /** Blocks Escape, backdrop and close button (e.g. while a request is pending). */
   locked?: boolean
+  /** A wider box from sm up, for long forms. */
+  wide?: boolean
   onClose: () => void
 }
 
 /** daisyUI dialog: bottom sheet on mobile, centered from sm. */
-export default function Modal({ open, title, children, actions, locked, onClose }: ModalProps) {
+export default function Modal({
+  open,
+  title,
+  children,
+  actions,
+  locked,
+  wide,
+  onClose,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
@@ -43,7 +53,7 @@ export default function Modal({ open, title, children, actions, locked, onClose 
         if (!locked) onClose()
       }}
     >
-      <div className="modal-box">
+      <div className={`modal-box ${wide ? 'sm:max-w-2xl' : ''}`}>
         <div className="flex items-start justify-between gap-2">
           <h2 id={titleId} className="text-lg font-bold break-words">
             {title}

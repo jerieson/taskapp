@@ -108,6 +108,13 @@ class DeviationReason(_PlainLookupMixin, Base):
     label: Mapped[str] = mapped_column(String(100), unique=True)
 
 
+class SupportType(_LookupMixin, Base):
+    """Type of a support dictionary entry: Concern, Inquiry, Bug, ..."""
+
+    __tablename__ = "support_types"
+    __table_args__ = (CheckConstraint(_COLOR_CHECK, name="color_hex"),)
+
+
 class ActivityGroupMember(Base):
     __tablename__ = "activity_group_members"
 

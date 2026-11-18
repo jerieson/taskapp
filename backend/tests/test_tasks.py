@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Priority,
-    Process,
-    ProcessRun,
     Role,
     Status,
     Task,
@@ -329,25 +327,6 @@ async def test_filters(client: AsyncClient, db: AsyncSession) -> None:
     assert await ids(state="open") == {a.id, c.id}
     assert await ids(due_from=today.isoformat()) == {a.id, c.id}
     assert await ids(due_to=(today + timedelta(days=1)).isoformat()) == {a.id}
-    assert await ids(in_process_run="false") == {a.id, b.id, c.id}
-    assert await ids(in_process_run="true") == set()
-
-
-async def test_filter_by_process_run(client: AsyncClient, db: AsyncSession) -> None:
-    user = await login_as(client, db)
-    process = Process(owner_id=user.id, name="Release")
-    db.add(process)
-    await db.flush()
-    run = ProcessRun(process_id=process.id, user_id=user.id)
-    db.add(run)
-    await db.flush()
-    in_run = await make_task(db, user=user, process_run_id=run.id)
-    await make_task(db, user=user)
-
-    resp = await client.get("/api/tasks", params={"process_run_id": run.id})
-    assert [t["id"] for t in resp.json()["items"]] == [in_run.id]
-    resp = await client.get("/api/tasks", params={"in_process_run": "true"})
-    assert [t["id"] for t in resp.json()["items"]] == [in_run.id]
 
 
 async def test_bad_due_range_is_422(client: AsyncClient, db: AsyncSession) -> None:

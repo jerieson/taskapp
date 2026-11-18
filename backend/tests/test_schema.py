@@ -11,19 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Invite,
-    Process,
-    ProcessRun,
-    ProcessStep,
     Role,
     Status,
     Team,
-    User,
 )
 from tests.factories import (
     make_log,
     make_priority,
     make_status,
-    make_task,
     make_team,
     make_user,
 )
@@ -148,43 +143,3 @@ async def test_deleting_unused_team_succeeds(db: AsyncSession) -> None:
     team = await make_team(db)
     await db.execute(delete(Team).where(Team.id == team.id))
     assert (await db.scalars(select(Team.id).where(Team.id == team.id))).all() == []
-
-
-async def _process_with_step(db: AsyncSession) -> tuple[User, Process, ProcessStep]:
-    user = await make_user(db)
-    process = Process(owner_id=user.id, name="Release")
-    db.add(process)
-    await db.flush()
-    step = ProcessStep(process_id=process.id, step_order=1, title="Tag release")
-    db.add(step)
-    await db.flush()
-    return user, process, step
-
-
-async def test_deleting_process_step_nulls_task_step_id(db: AsyncSession) -> None:
-    user, process, step = await _process_with_step(db)
-    run = ProcessRun(process_id=process.id, user_id=user.id)
-    db.add(run)
-    await db.flush()
-    task = await make_task(db, user=user, process_run_id=run.id, process_step_id=step.id)
-
-    await db.execute(delete(ProcessStep).where(ProcessStep.id == step.id))
-    await db.refresh(task)
-
-    assert task.process_step_id is None
-    assert task.process_run_id == run.id
-
-
-async def test_deleting_process_with_runs_fails(db: AsyncSession) -> None:
-    user, process, _ = await _process_with_step(db)
-    db.add(ProcessRun(process_id=process.id, user_id=user.id))
-    await db.flush()
-    async with violates(db, "fk_process_runs_process_id_processes"):
-        await db.execute(delete(Process).where(Process.id == process.id))
-
-
-async def test_deleting_process_without_runs_removes_steps(db: AsyncSession) -> None:
-    _, process, step = await _process_with_step(db)
-    await db.execute(delete(Process).where(Process.id == process.id))
-    remaining = await db.scalars(select(ProcessStep.id).where(ProcessStep.id == step.id))
-    assert remaining.all() == []

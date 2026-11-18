@@ -9,12 +9,6 @@ class Role(StrEnum):
     DEV = "dev"
 
 
-class RunStatus(StrEnum):
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-
-
 class AIFeature(StrEnum):
     NL_LOG_ENTRY = "nl_log_entry"
     DAILY_PLAN = "daily_plan"

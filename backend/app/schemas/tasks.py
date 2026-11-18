@@ -45,9 +45,6 @@ class TaskQuery(PaginationParams):
     """Due on or before this date (tasks without a due date are excluded)."""
     state: TaskState | None = None
     """`open`: status is not done. `completed`: status counts as done."""
-    process_run_id: int | None = None
-    in_process_run: bool | None = None
-    """true: only tasks created by a process run; false: only standalone tasks."""
     sort: TaskSort = TaskSort.DUE_DATE
 
     @model_validator(mode="after")
@@ -95,8 +92,6 @@ class TaskOut(BaseModel):
     completed_at: datetime | None
     is_overdue: bool
     """Due before today (APP_TIMEZONE) and not done."""
-    process_run_id: int | None
-    process_step_id: int | None
     created_at: datetime
     updated_at: datetime
 

@@ -2,7 +2,7 @@
 
 from app.models.ai import AIRequest, AISummary
 from app.models.auth import Invite, PasswordReset, UserSession
-from app.models.enums import AIFeature, Role, RunStatus
+from app.models.enums import AIFeature, Role
 from app.models.lookups import (
     Activity,
     ActivityGroup,
@@ -13,11 +13,12 @@ from app.models.lookups import (
     Priority,
     Project,
     Status,
+    SupportType,
     WorkSetup,
     project_categories,
 )
-from app.models.process import Process, ProcessRun, ProcessStep
 from app.models.prod_log import ProdLog
+from app.models.support import SupportEntry
 from app.models.task import Task
 from app.models.team import Team
 from app.models.user import User
@@ -35,14 +36,12 @@ __all__ = [
     "OmProject",
     "PasswordReset",
     "Priority",
-    "Process",
-    "ProcessRun",
-    "ProcessStep",
     "ProdLog",
     "Project",
     "Role",
-    "RunStatus",
     "Status",
+    "SupportEntry",
+    "SupportType",
     "Task",
     "Team",
     "User",

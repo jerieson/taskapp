@@ -19,10 +19,9 @@ from app.api.routers import (
     lookups,
     password_resets,
     planning,
-    process_runs,
-    processes,
     prod_logs,
     projects,
+    support,
     tasks,
     team_dashboard,
     teams,
@@ -87,11 +86,10 @@ def create_app() -> FastAPI:
         tasks,
         prod_logs,
         planning,
-        processes,
-        process_runs,
         teams,
         team_dashboard,
         dashboard,
+        support,
         ai,
     ):
         app.include_router(module.router, prefix="/api")
@@ -104,6 +102,7 @@ def create_app() -> FastAPI:
         lookups.activity_groups,
         lookups.om_projects,
         lookups.deviation_reasons,
+        lookups.support_types,
     ):
         app.include_router(router, prefix="/api")
 

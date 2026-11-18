@@ -6,7 +6,7 @@ import {
   ChartIcon,
   CheckSquareIcon,
   ClockIcon,
-  RepeatIcon,
+  LifebuoyIcon,
   ShieldIcon,
   UsersIcon,
 } from '../components/icons'
@@ -35,7 +35,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/today', label: 'Today', icon: CalendarIcon },
       { to: '/tasks', label: 'Tasks', icon: CheckSquareIcon },
       { to: '/logs', label: 'Logs', icon: ClockIcon },
-      { to: '/processes', label: 'Processes', icon: RepeatIcon },
+      { to: '/support', label: 'Support', icon: LifebuoyIcon },
       { to: '/dashboard', label: 'Dashboard', icon: ChartIcon },
     ],
   },

@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models import ProcessRun, Role, RunStatus, User
+from app.models import Role, User
 from tests.auth_helpers import login_as
 from tests.factories import (
     make_activity,
@@ -20,7 +20,6 @@ from tests.factories import (
     make_task,
     make_user,
 )
-from tests.test_processes import _defaults
 
 pytestmark = pytest.mark.anyio
 
@@ -58,7 +57,6 @@ async def test_endpoints_require_login(client: AsyncClient) -> None:
     assert (await client.get("/api/dashboard/hours/by-category", params=rng)).status_code == 401
     assert (await client.get("/api/dashboard/hours/by-activity", params=rng)).status_code == 401
     assert (await client.get("/api/dashboard/tasks", params=rng)).status_code == 401
-    assert (await client.get("/api/runs")).status_code == 401
 
 
 async def test_range_is_validated(client: AsyncClient, db: AsyncSession) -> None:
@@ -281,50 +279,3 @@ async def test_never_includes_other_users_numbers(
     assert [(i["category"]["id"], i["hours"]) for i in categories["items"]] == [(category.id, 1)]
     counts = await _get(client, "tasks", **wide)
     assert (counts["completed"], counts["open"], counts["overdue"]) == (0, 0, 0)
-
-
-# ---------------------------------------------------------------- runs
-
-
-async def test_runs_list_is_own_only_and_filters_by_status(
-    client: AsyncClient, new_client, db: AsyncSession
-) -> None:
-    await _defaults(db)
-    done = await make_status(db, is_done=True)
-    me = await login_as(client, db)
-    other_client = new_client()
-    await login_as(other_client, db)
-
-    async def start(c: AsyncClient, name: str, steps: int) -> dict:
-        resp = await c.post(
-            "/api/processes",
-            json={"name": name, "steps": [{"title": f"S{i}"} for i in range(steps)]},
-        )
-        assert resp.status_code == 201, resp.text
-        resp = await c.post(f"/api/processes/{resp.json()['id']}/runs", json={})
-        assert resp.status_code == 201, resp.text
-        return resp.json()
-
-    first = await start(client, "First", 2)
-    second = await start(client, "Second", 3)
-    await start(other_client, "Theirs", 1)
-    # Finish one task of the second run, and complete the first run entirely.
-    await client.patch(f"/api/tasks/{second['tasks'][0]['id']}", json={"status_id": done.id})
-    for task in first["tasks"]:
-        await client.patch(f"/api/tasks/{task['id']}", json={"status_id": done.id})
-
-    resp = await client.get("/api/runs")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["total"] == 2
-    assert {r["id"] for r in body["items"]} == {first["id"], second["id"]}
-
-    resp = await client.get("/api/runs", params={"status": "in_progress"})
-    items = resp.json()["items"]
-    assert [r["id"] for r in items] == [second["id"]]
-    assert items[0]["process"]["name"] == "Second"
-    assert items[0]["progress"] == {"done": 1, "total": 3}
-
-    run = await db.get_one(ProcessRun, first["id"], populate_existing=True)
-    assert run.status == RunStatus.COMPLETED
-    assert me.id == run.user_id

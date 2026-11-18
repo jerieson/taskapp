@@ -393,7 +393,7 @@ prod_logs
   created_at, updated_at, updated_by (FK users)
 
 support_entries
-  id, type_id (FK support_types), project (text), module (text, nullable),
+  id, type_id (FK support_types), project (text, nullable), module (text, nullable),
   sub_module (text, nullable), concern (text, required), cause (nullable),
   resolution (nullable), query (nullable, SQL shown as code), notes (nullable),
   is_active, created_by (FK users), updated_by (FK users), created_at, updated_at
@@ -424,7 +424,7 @@ ai_requests
 - **Date range:** a new row can cover a range ("Until" in the form): the same row is created on every weekday (Monday to Friday) in the range through `POST /api/logs/bulk` (all or nothing, max 31 rows; the daily caps count earlier rows of the request; errors name the day and are keyed `rows.N.field`).
 - **Export:** CSV with the sheet's columns in order: Date (`d-Mon-YYYY`), Work Set-Up, Planned Hours, Actual Hours Consumed, Planned (`Planned`/`Unplanned`), Category, Project, Activity/Task, Project (For O&M), Reason for Deviation, Remarks, Date Created. Hours with 2 decimals. One person per file, sorted by date then creation.
 - **Data tab import:** the admin uploads the sheet's Data tab CSV. Columns named after a category list that category's projects; `<Category>_<Project>` columns are an activity group for that project; `Project_Activity` is the group for projects under the enhancement categories; `OM_Reflected_Activity` / `OM_Not_Reflected_Activity` map to the two maintenance projects; `Operations & Maintenance_Project` fills `om_projects`. Import is idempotent (matches by label, case-insensitive), never deletes, and reports what it created and linked. The exact mapping is confirmed in the phase that builds it.
-- **Support dictionary:** shared by everyone. Search matches concern, cause, resolution, notes, project, module and sub-module (case-insensitive). The author or an admin edits or deactivates an entry; deactivated entries are hidden by default and shown with a filter. The admin can import entries from the team's CSV (columns: author, Type, Project, Module, Sub-module, Concern, Cause, Resolution, Query, Notes, Date Inputted).
+- **Support dictionary:** shared by everyone. Search matches concern, cause, resolution, notes, project, module and sub-module (case-insensitive). The author or an admin edits or deactivates an entry; deactivated entries are hidden by default and shown with a filter. The admin can import entries from the team's CSV (columns: author, Type, Project, Module, Sub-module, Concern, Cause, Resolution, Query, Notes, Date Inputted); the author column may be headed "0"). Import rules: a Type matches an existing type case-insensitively, else the single type whose label starts with it ("Data Modif" -> "Data Modification"), else a new type is created; cells made only of dashes/spaces are blank; blank-concern rows are skipped; an author matching a username becomes the entry's author, otherwise the importing admin is the author and "Author: <name>" goes in the notes; Date Inputted (M/D/YYYY) becomes the creation date; rows with the same type, project, module, sub-module and concern as an existing entry or earlier row are skipped (re-import is idempotent); `dry_run=true` previews.
 
 ### Delete behaviour
 | When this is deleted | Then |

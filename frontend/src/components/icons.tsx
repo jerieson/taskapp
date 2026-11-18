@@ -91,16 +91,6 @@ export function ClockIcon(props: IconProps) {
   )
 }
 
-export function RepeatIcon(props: IconProps) {
-  return (
-    <Stroke {...props}>
-      <path d="M17 1l4 4-4 4" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-    </Stroke>
-  )
-}
-
 export function ChartIcon(props: IconProps) {
   return (
     <Stroke {...props}>
@@ -301,14 +291,6 @@ export function FolderIcon(props: IconProps) {
   )
 }
 
-export function PlayIcon(props: IconProps) {
-  return (
-    <Stroke {...props}>
-      <path d="M7 4.5v15l12-7.5z" />
-    </Stroke>
-  )
-}
-
 export function SparklesIcon(props: IconProps) {
   return (
     <Stroke {...props}>
@@ -339,6 +321,25 @@ export function LockIcon(props: IconProps) {
     <Stroke {...props}>
       <rect x="5" y="11" width="14" height="10" rx="2" />
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </Stroke>
+  )
+}
+
+export function LifebuoyIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24" />
+    </Stroke>
+  )
+}
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <Stroke {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.35-4.35" />
     </Stroke>
   )
 }

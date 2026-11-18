@@ -1,5 +1,5 @@
 """Dropdown values: categories, statuses, priorities, work set-ups, activities,
-activity groups and O&M projects.
+activity groups, O&M projects, reasons for deviation and support types.
 
 Rows are never deleted, only deactivated. Code never refers to a row by its label;
 it uses the is_default / is_done / requires_om_project flags. Rules enforced here:
@@ -34,6 +34,7 @@ from app.models import (
     Priority,
     Role,
     Status,
+    SupportType,
     User,
     WorkSetup,
 )
@@ -49,6 +50,7 @@ type LookupRow = (
     | ActivityGroup
     | OmProject
     | DeviationReason
+    | SupportType
 )
 type LookupModel = (
     type[Category]
@@ -59,6 +61,7 @@ type LookupModel = (
     | type[ActivityGroup]
     | type[OmProject]
     | type[DeviationReason]
+    | type[SupportType]
 )
 type DefaultModel = type[Status] | type[Priority] | type[WorkSetup]
 
@@ -71,6 +74,7 @@ NOUN: dict[type, str] = {
     ActivityGroup: "activity group",
     OmProject: "O&M project",
     DeviationReason: "reason for deviation",
+    SupportType: "support type",
 }
 
 

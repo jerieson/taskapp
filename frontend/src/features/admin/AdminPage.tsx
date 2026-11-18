@@ -5,6 +5,7 @@ import DropdownsTab from './DropdownsTab'
 import InvitesTab from './InvitesTab'
 import OverviewTab from './OverviewTab'
 import ProjectsTab from './ProjectsTab'
+import SupportImportTab from './SupportImportTab'
 import TeamsTab from './TeamsTab'
 import UsersTab from './UsersTab'
 
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'invites', label: 'Invites', Component: InvitesTab },
   { id: 'dropdowns', label: 'Dropdowns', Component: DropdownsTab },
   { id: 'projects', label: 'Projects', Component: ProjectsTab },
+  { id: 'support', label: 'Support import', Component: SupportImportTab },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']

@@ -19,7 +19,6 @@ export interface TaskFilters {
   category_id?: number
   due_from?: string
   due_to?: string
-  in_process_run?: boolean
 }
 
 export const TASK_PAGE_SIZE = 50
@@ -58,17 +57,12 @@ export function useTaskOptions(openOnly = true) {
   })
 }
 
-/**
- * Process runs embed their tasks (and run progress and status follow task status), and
- * the dashboard counts them, so they are refreshed with the task lists.
- */
+/** The dashboard counts tasks, so it is refreshed with the task lists. */
 function useInvalidateTasks() {
   const queryClient = useQueryClient()
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: taskKeys.all }),
-      queryClient.invalidateQueries({ queryKey: ['runs'] }),
-      queryClient.invalidateQueries({ queryKey: ['processes'] }),
       queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
     ])
 }
@@ -94,13 +88,9 @@ export function useDeleteTask() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/tasks/${id}`),
-    // Logs linked to the task lose the link; a run may complete.
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: taskKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ['logs'] }),
-        queryClient.invalidateQueries({ queryKey: ['runs'] }),
-        queryClient.invalidateQueries({ queryKey: ['processes'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ]),
   })

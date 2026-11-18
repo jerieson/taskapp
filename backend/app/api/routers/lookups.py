@@ -1,5 +1,5 @@
 """Dropdown values: categories, statuses, priorities, work set-ups, activities, activity
-groups, O&M projects and reasons for deviation.
+groups, O&M projects, reasons for deviation and support types.
 
 Every role can list active values (for selects); only admins write or list inactive
 values. There are no delete endpoints: values are deactivated instead.
@@ -21,6 +21,7 @@ from app.models import (
     Priority,
     Role,
     Status,
+    SupportType,
     WorkSetup,
 )
 from app.schemas.lookups import (
@@ -48,6 +49,7 @@ from app.schemas.lookups import (
     StatusCreate,
     StatusOut,
     StatusUpdate,
+    SupportTypeOut,
     WorkSetupOut,
 )
 from app.services import lookups as service
@@ -403,3 +405,43 @@ async def activate_deviation_reason(reason_id: int, db: SessionDep) -> Deviation
 )
 async def deactivate_deviation_reason(reason_id: int, db: SessionDep) -> DeviationReason:
     return await service.set_active(db, DeviationReason, reason_id, False)
+
+
+# ---------------------------------------------------------------- support types
+
+support_types = APIRouter(prefix="/support-types", tags=["dropdowns"])
+
+
+@support_types.get("", response_model=Page[SupportTypeOut])
+async def list_support_types(
+    params: Query_, user: CurrentUser, db: SessionDep
+) -> Page[SupportTypeOut]:
+    service.ensure_can_include_inactive(user, params.include_inactive)
+    return await service.list_values(
+        db, SupportType, SupportTypeOut, params, params.include_inactive
+    )
+
+
+@support_types.post("", response_model=SupportTypeOut, status_code=201, dependencies=AdminOnly)
+async def create_support_type(data: LookupCreate, db: SessionDep) -> SupportType:
+    return await service.create_value(db, SupportType, data)
+
+
+@support_types.put("/order", status_code=204, dependencies=AdminOnly)
+async def reorder_support_types(data: ReorderIn, db: SessionDep) -> None:
+    await service.reorder(db, SupportType, data.ids)
+
+
+@support_types.patch("/{type_id}", response_model=SupportTypeOut, dependencies=AdminOnly)
+async def update_support_type(type_id: int, data: LookupUpdate, db: SessionDep) -> SupportType:
+    return await service.update_value(db, SupportType, type_id, data)
+
+
+@support_types.post("/{type_id}/activate", response_model=SupportTypeOut, dependencies=AdminOnly)
+async def activate_support_type(type_id: int, db: SessionDep) -> SupportType:
+    return await service.set_active(db, SupportType, type_id, True)
+
+
+@support_types.post("/{type_id}/deactivate", response_model=SupportTypeOut, dependencies=AdminOnly)
+async def deactivate_support_type(type_id: int, db: SessionDep) -> SupportType:
+    return await service.set_active(db, SupportType, type_id, False)

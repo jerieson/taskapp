@@ -1,0 +1,13 @@
+0,Type,Project,Module,Sub-module,Concern,Cause,Resolution,Query,Notes,Date Inputted
+Eson,Concern,SFA Mobile,Visit Management,- - - -,No customer on the device,Customer data not fully synced.,Perform a customer reset.,"SELECT 
+    *
+FROM
+    dim_customer
+WHERE
+    fspcode = 'DEF';",,
+JP,Data Modif,SFA Web, CT Sales ,Bookings,Wrong booking type,,Update the booking row.,,Ask the lead first.,7/10/2025
+,Inquiry,,,,No appkey.,,Generate an appkey.,,,02/04/2026
+JP,Concern,SFA Mobile,DR Details,,,Cause without a concern.,Ask.,,,
+,Escalation,Backend,Any,,Job stuck in queue,,Restart the job.,,,
+eson,concern,sfa mobile,Visit Management,,NO CUSTOMER  on the device,,,,,
+,,,,,,,,,,

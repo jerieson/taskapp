@@ -103,6 +103,14 @@ const LISTS = [
     maxLength: 100,
     hint: 'Offered as Reason for deviation on log rows (optional).',
   },
+  {
+    kind: 'support-types',
+    label: 'Support types',
+    singular: 'support type',
+    hasColor: true,
+    maxLength: 50,
+    hint: 'The Type of a support dictionary entry (Concern, Inquiry, Bug, …).',
+  },
 ] as const satisfies readonly {
   kind: LookupKind
   label: string

@@ -1,5 +1,5 @@
 """The caller's personal dashboard. Every number comes from the caller's own data only
-(admins included). Active process runs are listed by `GET /api/runs?status=in_progress`."""
+(admins included)."""
 
 from datetime import date, datetime
 from typing import Annotated

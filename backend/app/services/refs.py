@@ -11,6 +11,7 @@ from app.models import (
     Priority,
     Project,
     Status,
+    SupportType,
     WorkSetup,
 )
 
@@ -23,6 +24,7 @@ type RefModel = (
     | type[Activity]
     | type[OmProject]
     | type[DeviationReason]
+    | type[SupportType]
 )
 
 # Request field -> (model, noun used in messages)
@@ -35,6 +37,7 @@ REFS: dict[str, tuple[RefModel, str]] = {
     "activity_id": (Activity, "activity"),
     "om_project_id": (OmProject, "O&M project"),
     "deviation_reason_id": (DeviationReason, "reason for deviation"),
+    "type_id": (SupportType, "support type"),
 }
 
 

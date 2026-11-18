@@ -68,6 +68,10 @@ class DeviationReasonOut(PlainLookupOut):
     pass
 
 
+class SupportTypeOut(LookupOut):
+    pass
+
+
 class ActivityGroupOut(PlainLookupOut):
     activity_ids: list[int]
     """Member activities (active and inactive) in display order."""

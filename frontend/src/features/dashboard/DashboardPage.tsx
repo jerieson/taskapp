@@ -2,7 +2,7 @@
  * /dashboard: the user's own numbers. Hours per day (one week, `?week=` Monday) and per
  * week (last 8 weeks), actual with planned alongside; hours by project, category and
  * activity plus task counts for a shared
- * date range (`?range=` / `?from=&to=`); process runs in progress.
+ * date range (`?range=` / `?from=&to=`).
  */
 import {
   useHoursByActivity,
@@ -18,7 +18,6 @@ import PageHeader from '../../components/PageHeader'
 import { SkeletonChart, SkeletonStat } from '../../components/Skeleton'
 import { useDateRangeParam, useWeekParam } from '../../lib/dateRange'
 import { formatHours } from '../../lib/format'
-import ActiveRuns from './ActiveRuns'
 import { ChartCard, NoHours, SectionTitle, WeekNav } from './ChartParts'
 import HoursBarChart from './HoursBarChart'
 import HoursPerDayChart from './HoursPerDayChart'
@@ -39,7 +38,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Your own hours, tasks and process runs." />
+      <PageHeader title="Dashboard" description="Your own hours and tasks." />
 
       <div className="flex flex-col gap-8">
         <section aria-labelledby="dash-time" className="flex flex-col gap-4">
@@ -159,11 +158,6 @@ export default function DashboardPage() {
               )}
             </AsyncState>
           </div>
-        </section>
-
-        <section aria-labelledby="dash-runs" className="flex flex-col gap-4">
-          <SectionTitle id="dash-runs">Active process runs</SectionTitle>
-          <ActiveRuns />
         </section>
       </div>
     </>

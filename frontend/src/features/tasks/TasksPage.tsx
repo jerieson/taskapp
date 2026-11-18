@@ -15,7 +15,6 @@ import ConfirmModal from '../../components/ConfirmModal'
 import DataTable, { type Column } from '../../components/DataTable'
 import EmptyState from '../../components/EmptyState'
 import FilterPanel, { LookupFilter } from '../../components/FilterPanel'
-import { SelectField } from '../../components/FormField'
 import {
   CheckSquareIcon,
   FilterIcon,
@@ -40,7 +39,6 @@ interface FilterState {
   category: string
   dueFrom: string
   dueTo: string
-  source: string
 }
 
 const NO_FILTERS: FilterState = {
@@ -50,7 +48,6 @@ const NO_FILTERS: FilterState = {
   category: '',
   dueFrom: '',
   dueTo: '',
-  source: '',
 }
 
 type StateTab = TaskState | 'all'
@@ -81,7 +78,6 @@ function toTaskFilters(state: StateTab, f: FilterState): TaskFilters {
     category_id: optionalId(f.category),
     due_from: f.dueFrom || undefined,
     due_to: f.dueTo || undefined,
-    in_process_run: f.source ? f.source === 'run' : undefined,
   }
 }
 
@@ -141,15 +137,6 @@ function Filters({
         min={value.dueFrom || undefined}
         onChange={(dueTo) => set({ dueTo })}
       />
-      <SelectField
-        label="Source"
-        value={value.source}
-        onChange={(event) => set({ source: event.target.value })}
-      >
-        <option value="">All tasks</option>
-        <option value="run">From a process run</option>
-        <option value="standalone">Not from a process run</option>
-      </SelectField>
     </FilterPanel>
   )
 }
@@ -197,7 +184,7 @@ export default function TasksPage() {
       key: 'title',
       header: 'Task',
       isTitle: true,
-      cell: (task) => <TaskTitle task={task} showRunLink />,
+      cell: (task) => <TaskTitle task={task} />,
     },
     {
       key: 'status',

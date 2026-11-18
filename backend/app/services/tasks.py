@@ -5,8 +5,6 @@ Rules enforced here:
 - New tasks without a status/priority get the default one (found by `is_default`).
 - Moving to a status with `is_done` sets `completed_at`; moving to a status without it
   clears `completed_at`. Moving between two done statuses keeps the original time.
-- Changing the status of (or deleting) a task from a process run updates the run's
-  status (see `services.run_status`).
 - Create accepts only active dropdown values and projects. Update also accepts the
   value already on the task, even if it has since been deactivated.
 """
@@ -33,7 +31,6 @@ from app.schemas.tasks import (
     TaskUpdate,
 )
 from app.services.refs import check_ref
-from app.services.run_status import sync_run_status
 
 logger = logging.getLogger("app.tasks")
 
@@ -63,8 +60,6 @@ def task_out(row: Row[_TaskRow], today: date) -> TaskOut:
         due_date=task.due_date,
         completed_at=task.completed_at,
         is_overdue=task.due_date is not None and task.due_date < today and not status.is_done,
-        process_run_id=task.process_run_id,
-        process_step_id=task.process_step_id,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -131,7 +126,7 @@ _ORDER = {
 
 async def list_tasks(db: AsyncSession, user: User, params: TaskQuery, today: date) -> Page[TaskOut]:
     stmt = task_query().where(Task.user_id == user.id)
-    for field in ("status_id", "priority_id", "project_id", "category_id", "process_run_id"):
+    for field in ("status_id", "priority_id", "project_id", "category_id"):
         value = getattr(params, field)
         if value is not None:
             stmt = stmt.where(getattr(Task, field) == value)
@@ -143,10 +138,6 @@ async def list_tasks(db: AsyncSession, user: User, params: TaskQuery, today: dat
         stmt = stmt.where(~Status.is_done)
     elif params.state == TaskState.COMPLETED:
         stmt = stmt.where(Status.is_done)
-    if params.in_process_run is True:
-        stmt = stmt.where(Task.process_run_id.is_not(None))
-    elif params.in_process_run is False:
-        stmt = stmt.where(Task.process_run_id.is_(None))
 
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = await db.execute(
@@ -208,9 +199,6 @@ async def update_task(
         old = await db.get_one(Status, task.status_id)
         new = await db.get_one(Status, data.status_id)
         apply_status(task, new, was_done=old.is_done, now=utcnow())
-        status_changed = True
-    else:
-        status_changed = False
 
     for field in ("title", "status_id", "priority_id", "project_id", "category_id", "due_date"):
         if field in sent:
@@ -218,21 +206,14 @@ async def update_task(
     if "description" in sent:
         task.description = data.description or None
 
-    if status_changed and task.process_run_id is not None:
-        await sync_run_status(db, task.process_run_id)
     await db.commit()
     logger.info("task_updated", extra={"fields": {"task_id": task.id}})
     return await _load(db, user, task.id, today)
 
 
 async def delete_task(db: AsyncSession, user: User, task_id: int) -> None:
-    """Prod logs keep their data (task_id SET NULL); daily plan items go (CASCADE).
-
-    Deleting a run's last open task can complete the run."""
+    """No other table references tasks."""
     task = await _get_own(db, user, task_id)
-    run_id = task.process_run_id
     await db.delete(task)
-    if run_id is not None:
-        await sync_run_status(db, run_id)
     await db.commit()
     logger.info("task_deleted", extra={"fields": {"task_id": task_id}})

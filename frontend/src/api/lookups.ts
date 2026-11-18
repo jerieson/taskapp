@@ -1,7 +1,7 @@
 /*
  * Dropdown values (categories, statuses, priorities, work set-ups, activities, activity
- * groups, O&M projects, reasons for deviation), projects, and the sheet's Data tab
- * import.
+ * groups, O&M projects, reasons for deviation, support types), projects, and the sheet's
+ * Data tab import.
  *
  * Every role can read active values; admins also manage them and see inactive ones.
  * Code never refers to a value by its label: use the `is_default` / `is_done` /
@@ -19,6 +19,7 @@ export type Activity = Schemas['ActivityOut']
 export type ActivityGroup = Schemas['ActivityGroupOut']
 export type OmProject = Schemas['OmProjectOut']
 export type DeviationReason = Schemas['DeviationReasonOut']
+export type SupportType = Schemas['SupportTypeOut']
 export type Project = Schemas['ProjectOut']
 export type DataTabImport = Schemas['DataTabImportOut']
 export type LogOptions = Schemas['LogOptionsOut']
@@ -33,9 +34,18 @@ export type LookupKind =
   | 'activity-groups'
   | 'om-projects'
   | 'deviation-reasons'
+  | 'support-types'
 export type DefaultKind = 'statuses' | 'priorities' | 'work-setups'
 export type LookupRow =
-  Category | Status | Priority | WorkSetup | Activity | ActivityGroup | OmProject | DeviationReason
+  | Category
+  | Status
+  | Priority
+  | WorkSetup
+  | Activity
+  | ActivityGroup
+  | OmProject
+  | DeviationReason
+  | SupportType
 
 interface LookupTypes {
   categories: {
@@ -85,6 +95,12 @@ interface LookupTypes {
     page: Schemas['Page_DeviationReasonOut_']
     create: Schemas['LongPlainLookupCreate']
     update: Schemas['LongPlainLookupUpdate']
+  }
+  'support-types': {
+    row: SupportType
+    page: Schemas['Page_SupportTypeOut_']
+    create: Schemas['LookupCreate']
+    update: Schemas['LookupUpdate']
   }
 }
 
