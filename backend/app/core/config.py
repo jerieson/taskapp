@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_timeout_seconds: float = Field(120.0, gt=0)
     ai_daily_limit_per_user: int = Field(50, ge=0)
+    # Characters of log text (remarks) sent with an AI team summary prompt.
+    ai_summary_char_budget: int = Field(20000, ge=500)
 
     @field_validator("llm_provider")
     @classmethod

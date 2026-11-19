@@ -22,6 +22,7 @@ Use current stable versions of everything. Check the latest version at install t
 - TanStack Query for server state
 - React Hook Form + Zod for forms (`@hookform/resolvers` connects them)
 - Recharts for charts
+- react-markdown to render AI summaries (no raw HTML)
 - DayPicker (`@daypicker/react`) for date pickers, styled by daisyUI's `react-day-picker` class
 - `openapi-typescript` to generate TS types from the FastAPI OpenAPI schema
 - ESLint + Prettier

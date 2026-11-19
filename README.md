@@ -125,14 +125,19 @@ Ask before adding anything not listed in CLAUDE.md.
 AI features are off until `LLM_PROVIDER` is set in `.env`. When it is set, the app refuses to
 start unless that provider has an adapter and `LLM_MODEL` and `LLM_API_KEY` are filled in.
 
-**Privacy:** using an AI feature sends the related log and task text to the configured LLM
-provider.
+**Privacy:** using an AI feature sends the related log text (your note, or a team's log
+remarks) to the configured LLM provider.
 
 Features:
 
 - **Log entry from text** (`POST /api/ai/log-draft`, on `/logs` and `/today`): sends the text
-  plus your open task titles and the active category and project names. The draft only
-  pre-fills the log form; nothing is saved until you click "Add log".
+  plus the active dropdown values (categories, projects, activities, O&M projects, work
+  set-ups). The draft rows are only shown for review; nothing is saved until you confirm.
+- **Team summary** (`POST /api/ai/team-summary`, on `/team/dashboard`): managers (own team)
+  and admins (any team). Sends figures computed in SQL plus member usernames and the log
+  remarks of the period (most recent first, cut to `AI_SUMMARY_CHAR_BUDGET` characters). The
+  AI writes the narrative only. Summaries are saved and reused for the same team and period
+  until someone clicks "Regenerate"; `GET /api/ai/team-summaries?team_id=` lists them.
 
 | Variable | Meaning |
 |---|---|
@@ -142,6 +147,7 @@ Features:
 | `LLM_API_KEY` | API key for the endpoint. |
 | `LLM_TIMEOUT_SECONDS` | Per-request timeout (default 120). |
 | `AI_DAILY_LIMIT_PER_USER` | Provider calls per user per day (in `APP_TIMEZONE`); then HTTP 429. |
+| `AI_SUMMARY_CHAR_BUDGET` | Characters of log remarks sent with a team summary (default 20000). |
 
 Run `make ai-smoke` after changing these. It makes one real structured call and one text
 call and prints the validated result and token usage. Tests never call a real provider; they

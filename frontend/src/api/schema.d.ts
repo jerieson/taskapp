@@ -1193,6 +1193,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/team-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Team Summary
+         * @description AI narrative of a team's work over a period (managers: own team, admins: any
+         *     team, devs: 403). Figures are computed from the database; the AI writes prose only.
+         *     Log remarks are sent to the configured AI provider.
+         *
+         *     Returns the saved summary for the same team and period (`cached`, no AI call)
+         *     unless `regenerate` is true. `stats` are the database figures, computed now.
+         *
+         *     Errors: 403 for devs, 404 `not_found` for a team the caller cannot see, 422
+         *     `no_team_logs`, plus the AI errors of /ai/log-draft.
+         */
+        post: operations["create_team_summary_api_ai_team_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/team-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Team Summaries
+         * @description Saved summaries of one team, newest first.
+         */
+        get: operations["list_team_summaries_api_ai_team_summaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/categories": {
         parameters: {
             query?: never;
@@ -3021,6 +3069,17 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** Page[TeamSummaryOut] */
+        Page_TeamSummaryOut_: {
+            /** Items */
+            items: components["schemas"]["TeamSummaryOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** Page[WorkSetupOut] */
         Page_WorkSetupOut_: {
             /** Items */
@@ -3792,6 +3851,110 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * TeamSummaryOut
+         * @description A saved AI team summary. The text is markdown written by the AI; numbers in it
+         *     were copied from the database figures it was given.
+         */
+        TeamSummaryOut: {
+            /** Id */
+            id: number;
+            /** Team Id */
+            team_id: number;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Summary Text */
+            summary_text: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            requested_by: components["schemas"]["UserRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TeamSummaryRequest */
+        TeamSummaryRequest: {
+            /** Team Id */
+            team_id: number;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Regenerate
+             * @default false
+             */
+            regenerate: boolean;
+        };
+        /** TeamSummaryResult */
+        TeamSummaryResult: {
+            /** Id */
+            id: number;
+            /** Team Id */
+            team_id: number;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Summary Text */
+            summary_text: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            requested_by: components["schemas"]["UserRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Cached */
+            cached: boolean;
+            stats: components["schemas"]["TeamSummaryStats"];
+        };
+        /**
+         * TeamSummaryStats
+         * @description Database figures for the team and period (team snapshot on each log), computed
+         *     when the response is built.
+         */
+        TeamSummaryStats: {
+            /** Actual Hours */
+            actual_hours: number;
+            /** Planned Hours */
+            planned_hours: number;
+            /** Unplanned Hours */
+            unplanned_hours: number;
+            /** Log Rows */
+            log_rows: number;
+            /** Members With Hours */
+            members_with_hours: number;
+            /** Deviation Rows */
+            deviation_rows: number;
         };
         /**
          * TeamTaskCounts
@@ -6866,6 +7029,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogDraftOut"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_team_summary_api_ai_team_summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamSummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamSummaryResult"];
+                };
+            };
+            /** @description Client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_team_summaries_api_ai_team_summaries_get: {
+        parameters: {
+            query: {
+                limit?: number;
+                offset?: number;
+                team_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_TeamSummaryOut_"];
                 };
             };
             /** @description Client error */

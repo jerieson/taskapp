@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 interface StatCardProps {
   label: string
-  value: number
+  value: number | string
   hint?: ReactNode
   icon: ReactNode
   /** Under the hint, e.g. a "Needs attention" badge. */

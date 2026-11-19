@@ -5,6 +5,7 @@
  *
  * Hours follow the team snapshot on each log; task numbers are counts only. "Next
  * week's plan" shows each member's planned hours per day and who has not planned.
+ * The AI summary uses the date range as its period.
  */
 import { useState, type ReactNode } from 'react'
 
@@ -35,6 +36,7 @@ import {
   formatWeekday,
 } from '../../lib/format'
 import { memberNote } from '../../lib/labels'
+import { PastSummaries, TeamSummaryCard } from '../ai/TeamSummary'
 import { DeadlineCountdown } from '../today/PlanningParts'
 import { ChartCard, NoHours, SectionTitle, WeekNav } from './ChartParts'
 import HoursBarChart from './HoursBarChart'
@@ -296,6 +298,12 @@ export default function TeamDashboard({ teamId }: { teamId: number }) {
           <DateRangePicker state={rangeState} />
         </div>
 
+        <TeamSummaryCard
+          key={`${teamId}:${range.from}:${range.to}`}
+          teamId={teamId}
+          range={range}
+        />
+
         <div className="grid gap-4 md:grid-cols-2 md:items-start">
           <AsyncState query={byMember} skeleton={<SkeletonChart />}>
             {() => (
@@ -407,6 +415,11 @@ export default function TeamDashboard({ teamId }: { teamId: number }) {
             )}
           </AsyncState>
         </div>
+      </section>
+
+      <section aria-labelledby="team-summaries" className="flex flex-col gap-4">
+        <SectionTitle id="team-summaries">AI summaries</SectionTitle>
+        <PastSummaries key={teamId} teamId={teamId} />
       </section>
     </div>
   )

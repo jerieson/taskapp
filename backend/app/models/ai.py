@@ -1,10 +1,14 @@
 from datetime import date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, ForeignKey, Identity, Index, String, Text, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin
 from app.models.enums import AIFeature, str_enum
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class AISummary(CreatedAtMixin, Base):
@@ -26,6 +30,8 @@ class AISummary(CreatedAtMixin, Base):
     summary_text: Mapped[str] = mapped_column(Text)
     provider: Mapped[str] = mapped_column(String(50))
     model: Mapped[str] = mapped_column(String(100))
+
+    requester: Mapped[User] = relationship(lazy="raise")
 
 
 class AIRequest(CreatedAtMixin, Base):
